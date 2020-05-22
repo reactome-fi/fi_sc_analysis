@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
+<!-- To enable the following logging configuration, logback-classic from ch.qos.logback 
+should be included in pom.xml -->
 <configuration>
     <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
         <encoder>
@@ -7,9 +9,9 @@
     </appender>
 
     <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
-        <file>logs/ReactomeFIViz.log</file>
+        <file>logs/fi_sc_analysis.log</file>
         <rollingPolicy class="ch.qos.logback.core.rolling.FixedWindowRollingPolicy">
-            <fileNamePattern>logs/ReactomeFIViz-%i-log.zip</fileNamePattern>
+            <fileNamePattern>logs/fi_sc_analysis-%i-log.zip</fileNamePattern>
             <minIndex>1</minIndex>
             <maxIndex>5</maxIndex>
         </rollingPolicy>
@@ -21,8 +23,6 @@
             <pattern>%d %-5level [%thread] %logger{0}: %msg%n</pattern>
         </encoder>
     </appender>
-
-    <logger name="org.springframework" level="INFO" />
 
     <root level="DEBUG">
         <appender-ref ref="STDOUT" />

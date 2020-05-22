@@ -13,7 +13,8 @@ import java.util.List;
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVParser;
 import org.apache.commons.csv.CSVRecord;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import smile.data.DataFrame;
 import smile.data.type.DataTypes;
@@ -30,8 +31,9 @@ import smile.math.matrix.Matrix;
  * @author wug
  *
  */
+@SuppressWarnings("rawtypes")
 public class DataReader {
-    private Logger logger = Logger.getLogger(DataReader.class);
+    private Logger logger = LoggerFactory.getLogger(DataReader.class);
     
     public DataReader() {
     }
@@ -41,12 +43,38 @@ public class DataReader {
      * @param file
      * @return
      */
-    public Matrix readMatrixMarketFile(String file) throws IOException, ParseException {
-        Matrix matrix = Matrix.market(Paths.get(file));
-        logger.debug(String.format("Loaded matrix with %d rows, %d colmns:",
+    public ScDataFrame readMatrixMarketFile(String countFile,
+                                       String barcodeFile,
+                                       String featureFile,
+                                       Integer minCount) throws Exception {
+        Matrix matrix = Matrix.market(Paths.get(countFile));
+        logger.info(String.format("Loaded matrix with %d rows, %d colmns.",
                      matrix.nrows(),
                      matrix.ncols()));
-        return matrix; 
+        ScDataFrame df = new ScDataFrame();
+        DataFrame barcodeDF = readDataFrameInTSVNoHead(barcodeFile);
+        DataFrame featureDF = readDataFrameInTSVNoHead(featureFile);
+        // Need to merge all into a single DataFrame
+        // The matrix should be provided as cell x gene format
+        matrix = matrix.transpose();
+        df.setLayout(CountMatrixLayout.CELL_TIMES_GENE);
+        MatrixDataFrame mdf = new MatrixDataFrame();
+        mdf.setMatrix(matrix);
+        mdf.setRowNames(barcodeDF.column(0));
+        mdf.setColNames(featureDF.column(0));
+        if (minCount != null) {
+            mdf.filterRows(minCount.doubleValue());
+            mdf.filterCols(minCount.doubleValue());
+            logger.info(String.format("Filter for %d: %d rows, %d columns.",
+                        minCount,
+                        mdf.getMatrix().nrows(),
+                        mdf.getMatrix().ncols()));
+        }
+        DataFrame wrapped = mdf.toDataFrame();
+        df.setWrapped(wrapped);
+        df.setCountStartCol(1);
+        df.setCountEndCol(wrapped.ncols() - 1);
+        return df;
     }
     
     /**
@@ -116,7 +144,6 @@ public class DataReader {
         BufferedReader br = Files.newBufferedReader(Paths.get(file));
         String line = br.readLine();
         String[] colNames = line.split("\t");
-        @SuppressWarnings("rawtypes")
         BaseVector[] cols = new BaseVector[colNames.length];
         List<String> names = new ArrayList<>(); // For the first column
         List<double[]> counts = new ArrayList<>();
@@ -196,18 +223,29 @@ public class DataReader {
         return df;
     }
     
-    private DataFrame readDataFrameInTSV(String fileName) throws IOException {
+    private DataFrame readDataFrameInTSVNoHead(String fileName) throws IOException {
         // Get the first line for structure type
         BufferedReader br = Files.newBufferedReader(Paths.get(fileName));
         String line = br.readLine();
-        String[] colNames = line.split("\t");
-        @SuppressWarnings("rawtypes")
+        // Take a peek so that we know how many columns there
+        String[] tokens = line.split("\t"); 
+        String[] colNames = new String[tokens.length];
+        for (int i = 0; i < colNames.length; i++)
+            colNames[i] = "Col" + i;
         BaseVector[] cols = new BaseVector[colNames.length];
         List<String[]> rows = new ArrayList<>();
-        while ((line = br.readLine()) != null) {
-            String[] tokens = line.split("\t");
+        while (true) {
             rows.add(tokens);
+            line = br.readLine();
+            if (line == null)
+                break;
+            tokens = line.split("\t");
         }
+        return createDataFrame(br, colNames, cols, rows);
+    }
+
+    private DataFrame createDataFrame(BufferedReader br, String[] colNames, BaseVector[] cols, List<String[]> rows)
+            throws IOException {
         for (int i = 0; i < colNames.length; i++) {
             String[] col = new String[rows.size()];
             for (int j = 0; j < col.length; j++)
@@ -216,6 +254,20 @@ public class DataReader {
         }
         br.close();
         return DataFrame.of(cols);
+    }
+    
+    private DataFrame readDataFrameInTSV(String fileName) throws IOException {
+        // Get the first line for structure type
+        BufferedReader br = Files.newBufferedReader(Paths.get(fileName));
+        String line = br.readLine();
+        String[] colNames = line.split("\t");
+        BaseVector[] cols = new BaseVector[colNames.length];
+        List<String[]> rows = new ArrayList<>();
+        while ((line = br.readLine()) != null) {
+            String[] tokens = line.split("\t");
+            rows.add(tokens);
+        }
+        return createDataFrame(br, colNames, cols, rows);
     }
 
 }

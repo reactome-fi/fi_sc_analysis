@@ -1,14 +1,15 @@
 package org.reactome.sc;
 
-import java.util.Arrays;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 import java.util.stream.IntStream;
 
-import org.junit.Test;
-
 import smile.data.DataFrame;
+import smile.data.type.DataType;
+import smile.data.type.DataTypes;
 import smile.data.vector.BaseVector;
 import smile.data.vector.DoubleVector;
-import smile.data.vector.StringVector;
 import smile.math.matrix.Matrix;
 
 /**
@@ -107,5 +108,5 @@ public class SmileUtilities {
         DataFrame countsDF = df.select(selectedCols);
         return countsDF;
     }
-
+    
 }
