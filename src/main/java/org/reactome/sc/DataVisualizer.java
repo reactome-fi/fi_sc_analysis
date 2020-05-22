@@ -3,6 +3,7 @@ package org.reactome.sc;
 import java.awt.Color;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
@@ -12,6 +13,7 @@ import java.util.stream.IntStream;
 
 import javax.swing.JFrame;
 
+import org.reactome.sc.ClusterAnalyzer.Type;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -33,61 +35,81 @@ import smile.projection.PCA;
  * @author wug
  *
  */
-@SuppressWarnings("rawtypes")
+@SuppressWarnings({"rawtypes", "unchecked"})
 public class DataVisualizer {
     private static final Logger logger = LoggerFactory.getLogger(DataVisualizer.class);
+    // The following used as the setting for the data visualization
+    private Integer topVarFeatures = null; // Default we need all features.
+    private boolean needPCA = false;
+    private Integer topPCs = 50; // As the default
+    // XMeans works good for 6-group simulated data.
+    private ClusterAnalyzer.Type clusterType = Type.XMeans; // As the default algorithms
+    private Integer clusterNumber = 20; // In case we need to perform cluster
 
     public DataVisualizer() {
     }
     
     public static void main(String[] args) throws Exception {
+        DataReader reader = new DataReader();
+        ScDataFrame df = null;
         
-        logger.debug("This is a test!");
-        if (true)
-            return;
-        
-//        String dir = "/Users/wug/Documents/missy_single_cell/seq_data_v2/17_5_gfp/filtered_feature_bc_matrix/";
-//        String fileName = "matrix.mtx";
+//        // Simulated data
+//        String group = "Group";
+//        group = null;
+//        Integer top = null;
+//        boolean needPCA = false;
+//        Integer topPCs = null;
+//        
 //        String dir = "data/simulated/";
 //        String cellFileName = dir + "6_cell_info.csv";
 //        String countFileName = dir + "6_group_true.csv";
-//        countFileName = dir + "6_group_drop.csv";
+////        countFileName = dir + "6_group_drop.csv";
 //        countFileName = dir + "6_dca_results/mean.tsv";
-//        
-//        DataReader reader = new DataReader();
-//        ScDataFrame df = reader.readCountsFiles(countFileName, 
-//                                                CountMatrixLayout.GENE_TIMES_CELL,
-//                                                cellFileName);
+//        df = reader.readCountsFiles(countFileName,
+//                                    CountMatrixLayout.GENE_TIMES_CELL, 
+//                                    cellFileName);
+//        df.setName("Denoised 6 Groups");
         
-        String dir = "/Users/wug/Documents/missy_single_cell/seq_data_v2/17_5_gfp/filtered_feature_bc_matrix/";
-        String countFileName = dir + "matrix.mtx";
-        String barcodeFile = dir + "barcodes.tsv";
-        String featureFile = dir + "features.tsv";
         String group = null;
         Integer top = 1000;
         boolean needPCA = true;
         Integer topPCs = 100;
+        Integer clusterNumber = 20;
+
+        // Original results
+//        String dir = "/Users/wug/Documents/missy_single_cell/seq_data_v2/17_5_gfp/filtered_feature_bc_matrix/";
+//        String countFileName = dir + "matrix.mtx";
+//        String barcodeFile = dir + "barcodes.tsv";
+//        String featureFile = dir + "features.tsv";
+//        df = reader.readMatrixMarketFile(countFileName,
+//                                         barcodeFile, 
+//                                         featureFile,
+//                                         5); // The cutoff for the minimum total for both genes and cells
+//        df.setName("Original 17_5_GFP");
         
-        DataReader reader = new DataReader();
-        ScDataFrame df = reader.readMatrixMarketFile(countFileName,
-                                                     barcodeFile, 
-                                                     featureFile,
-                                                     1);
-        
-        DataVisualizer visualize = new DataVisualizer();
-//        JFrame frame = visualize.visualizeInPCA(df, group, top);
-        JFrame frame = visualize.visualizeInUMAP(df, 
-                                                 group,
-                                                 top, 
-                                                 needPCA,
-                                                 topPCs);
-//        JFrame frame = visualize.visualizeInTSNE(df, 
-//                                                 group, 
-//                                                 top,
-//                                                 needPCA,
-//                                                 topPCs);
-        frame.setTitle(countFileName);
-        frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        // DCA results
+                String dir = "results/17_5_gfp/dca_052220/";
+                String countFileName = dir + "mean.tsv";
+                df = reader.readCountsFiles(countFileName,
+                                                        CountMatrixLayout.GENE_TIMES_CELL, 
+                                                        null);
+         df.setName("Denoised 17_5_GFP");
+
+        DataVisualizer visualizer = new DataVisualizer();
+        visualizer.topVarFeatures = top;
+        visualizer.needPCA = needPCA;
+        visualizer.topPCs = topPCs;
+        visualizer.clusterNumber = clusterNumber;
+        List<JFrame> frames = new ArrayList<>();
+        JFrame frame = visualizer.visualizeInPCA(df, group);
+        frames.add(frame);
+        frame = visualizer.visualizeInUMAP(df, group);
+        frames.add(frame);
+        frame = visualizer.visualizeInTSNE(df, group);
+        frames.forEach(f -> {
+            f.setTitle(countFileName);
+            f.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        });
     }
     
     /**
@@ -100,15 +122,16 @@ public class DataVisualizer {
      * @throws Exception
      */
     public JFrame visualizeInTSNE(ScDataFrame df, // layout cell x gene
-                                  String colorColName,
-                                  Integer topVarFeatures,
-                                  boolean needPCA,
-                                  Integer topPCs) throws Exception {
+                                  String colorColName) throws Exception {
         // Keep the color column first
         BaseVector colorCol = getColorCol(df, colorColName);
         Matrix normalizedMatrix = normalizeCounts(df);
         // Do tSNE
         double[][] values = getValues(normalizedMatrix, topVarFeatures);
+        if (colorCol == null)
+            colorCol = new ClusterAnalyzer().cluster(values,
+                                                     clusterType,
+                                                     clusterNumber);
         TSNE tsne = null;
         if (needPCA) {
             Matrix projection = prePCA(values, topPCs);
@@ -121,6 +144,7 @@ public class DataVisualizer {
         return plot(coordinates,
                     "tSNE1",
                     "tSNE2",
+                    df.getName(),
                     colorCol);
     }
 
@@ -158,6 +182,7 @@ public class DataVisualizer {
     private JFrame plot(double[][] coordinates,
                         String xLabel,
                         String yLabel,
+                        String title,
                         BaseVector colorCol) throws InterruptedException, InvocationTargetException {
         BaseVector[] cols = new BaseVector[2];
         // The order seems different from the conventional one
@@ -180,14 +205,17 @@ public class DataVisualizer {
                                   xLabel, 
                                   yLabel, 
                                   colorCol == null ? null : colorCol.name(),
-                    '.');
+                                  '.');
             // Sort the legends
             Legend[] legends = plot.legends().get();
             if (legends != null)
                 Arrays.sort(legends, (l1, l2) -> getLegendText(l1).compareTo(getLegendText(l2)));
         }
         Canvas canvas = plot.canvas();
-        canvas.setAxisLabels(xLabel, yLabel);
+        if (xLabel != null && yLabel != null)
+            canvas.setAxisLabels(xLabel, yLabel);
+        if (title != null)
+            canvas.setTitle(title);
         return canvas.window();
     }
 
@@ -208,10 +236,7 @@ public class DataVisualizer {
     }
     
     public JFrame visualizeInUMAP(ScDataFrame df,
-                                  String colorColName,
-                                  Integer topVarFeatures,
-                                  boolean needPCA,
-                                  Integer topPCs) throws Exception {
+                                  String colorColName) throws Exception {
         BaseVector colorCol = getColorCol(df, colorColName);
         // Do PCA
         Matrix countMatrix = normalizeCounts(df);
@@ -224,6 +249,10 @@ public class DataVisualizer {
         }
         else
             umap = UMAP.of(values);
+        if (colorCol == null) 
+            colorCol = new ClusterAnalyzer().cluster(values, 
+                                                     clusterType,
+                                                     clusterNumber);
         double[][] coordinates = MathEx.transpose(umap.coordinates);
         // From UMAP, we may lost some data points. Therefore, we need
         // to do this when the color column is assigned:
@@ -233,7 +262,11 @@ public class DataVisualizer {
                 groups[i] = colorCol.get(umap.index[i]).toString();
             colorCol = StringVector.of(colorCol.name(), groups);
         }
-        return plot(coordinates, "UMAP1", "UMAP2", colorCol);
+        return plot(coordinates,
+                    "UMAP1",
+                    "UMAP2",
+                    df.getName(),
+                    colorCol);
     }
     
     /**
@@ -270,24 +303,32 @@ public class DataVisualizer {
      * @throws Exception
      */
     public JFrame visualizeInPCA(ScDataFrame df,
-                                 String colorColName,
-                                 Integer topVarGenes) throws Exception {
+                                 String colorColName) throws Exception {
         BaseVector colorCol = getColorCol(df, colorColName);
         // Do PCA
         Matrix countMatrix = normalizeCounts(df);
-        // df is in the cell x gene layout. However, for PCA we need to 
-        // use the gene x cell layout.
+        // df is in the cell x gene layout.
         double[][] values = null;
-        if (topVarGenes == null)
+        if (topVarFeatures == null)
             values = convertMatrixToDoubleArray(countMatrix.transpose());
         else
-            values = selectTopVariantGenes(countMatrix, topVarGenes);
+            values = selectTopVariantGenes(countMatrix, topVarFeatures);
+        if (colorCol == null)
+            colorCol = new ClusterAnalyzer().cluster(values,
+                                                     clusterType,
+                                                     clusterNumber);
+        // df is in the cell x gene layout. However, for PCA we need to 
+        // use the gene x cell layout.
         values = MathEx.transpose(values);
         PCA pca = PCA.fit(values).setProjection(2);
         // The project is a 2 x cell_number layout, which is used by the plot
         Matrix projection = pca.getProjection();
         double[][] coordinates = SmileUtilities.convertToArrays(projection);
-        return plot(coordinates, "PC1", "PC2", colorCol);
+        return plot(coordinates,
+                    "PC1",
+                    "PC2",
+                    df.getName(),
+                    colorCol);
     }
     
     private double[][] convertMatrixToDoubleArray(Matrix matrix) {
@@ -302,11 +343,14 @@ public class DataVisualizer {
      * @param legend
      * @return
      */
-    private String getLegendText(Legend legend)  {
+    private Comparable getLegendText(Legend legend)  {
         try {
             Field field = legend.getClass().getDeclaredField("text");
             field.setAccessible(true); // By pass the access control 
-            return field.get(legend).toString();
+            String text = field.get(legend).toString();
+            if (text.matches("\\d+"))
+                return new Integer(text); // Want to use integer for better sorting
+            return text;
         }
         catch(Exception e) {
             logger.error(e.getMessage(), e);

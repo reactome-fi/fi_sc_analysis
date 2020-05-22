@@ -9,6 +9,7 @@ import java.util.Set;
 import smile.data.DataFrame;
 import smile.data.vector.BaseVector;
 import smile.data.vector.DoubleVector;
+import smile.data.vector.StringVector;
 import smile.math.MathEx;
 import smile.math.matrix.Matrix;
 
@@ -39,10 +40,12 @@ public class MatrixDataFrame {
      * @return
      */
     public DataFrame toDataFrame() {
-        BaseVector[] cols = new BaseVector[matrix.ncols()];
-        for (int i = 0; i < cols.length; i++) {
-            cols[i] = DoubleVector.of(colNames[i],
-                                      SmileUtilities.getColumn(matrix, i));
+        BaseVector[] cols = new BaseVector[matrix.ncols() + 1];
+        // Need to export the row names too
+        cols[0] = StringVector.of("Cell", rowNames);
+        for (int i = 1; i < cols.length; i++) {
+            cols[i] = DoubleVector.of(colNames[i - 1],
+                                      SmileUtilities.getColumn(matrix, i - 1));
         }
         return DataFrame.of(cols);
     }

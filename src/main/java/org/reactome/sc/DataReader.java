@@ -13,6 +13,7 @@ import java.util.List;
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVParser;
 import org.apache.commons.csv.CSVRecord;
+import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -36,6 +37,26 @@ public class DataReader {
     private Logger logger = LoggerFactory.getLogger(DataReader.class);
     
     public DataReader() {
+    }
+    
+    @Test
+    public void testConvertMatrixMarketFileToTSV() throws Exception {
+        String dir = "/Users/wug/Documents/missy_single_cell/seq_data_v2/17_5_gfp/filtered_feature_bc_matrix/";
+        String countFile = dir + "matrix.mtx";
+        String barcodeFile = dir + "barcodes.tsv";
+        String featureFile = dir + "features.tsv";
+        int minCounts = 5;
+        String output = "results/17_5_gfp/counts_filtered_052220.tsv";
+        convertMatrixMarketFileToTSV(countFile, barcodeFile, featureFile, minCounts, output);
+    }
+    
+    public void convertMatrixMarketFileToTSV(String countFile,
+                                             String barcodeFile,
+                                             String featureFile,
+                                             Integer minCount,
+                                             String outFile) throws Exception {
+        ScDataFrame df = readMatrixMarketFile(countFile, barcodeFile, featureFile, minCount);
+        df.write(outFile);
     }
     
     /**
@@ -180,6 +201,7 @@ public class DataReader {
     public ScDataFrame readCountsFiles(String countFile,
                                        CountMatrixLayout layout,
                                        String cellFile) throws IOException, URISyntaxException, ParseException {
+        logger.debug("Reading " + countFile + "...");
         ScDataFrame countDF = readMatrixDataFrame(countFile);
         // We are referring the actual wrapped DataFrame object.
         DataFrame df = countDF.getWrapped();
@@ -194,7 +216,9 @@ public class DataReader {
         countDF.setCountEndCol(countDF.getWrapped().ncols() - 1); // Inclusive
         if (cellFile != null) {
             DataFrame cellDF = readDataFrame(cellFile);
-            cellDF = cellDF.drop(0); // We don't need the first column
+            cellDF = cellDF.drop(0); 
+            if (cellDF.names()[0].equals(df.names()[0]))
+                cellDF = cellDF.drop(0); // There is another cell column
             DataFrame merged = df.merge(cellDF);
             countDF.setWrapped(merged);
         }

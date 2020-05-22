@@ -1,15 +1,11 @@
 package org.reactome.sc;
 
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
 import java.util.stream.IntStream;
 
 import smile.data.DataFrame;
-import smile.data.type.DataType;
-import smile.data.type.DataTypes;
 import smile.data.vector.BaseVector;
 import smile.data.vector.DoubleVector;
+import smile.math.matrix.DenseMatrix;
 import smile.math.matrix.Matrix;
 
 /**
@@ -109,4 +105,16 @@ public class SmileUtilities {
         return countsDF;
     }
     
+    public static DenseMatrix getCountsMatrix(ScDataFrame df) {
+        DataFrame countsDF = SmileUtilities.select(df.getWrapped(), 
+                                                   df.getCountStartCol(), 
+                                                   df.getCountEndCol());
+        DenseMatrix matrix = countsDF.toMatrix();
+        return matrix;
+    }
+    
+    public static double[][] getCounts(ScDataFrame df) {
+        DenseMatrix matrix = getCountsMatrix(df);
+        return convertToArrays(matrix);
+    }
 }
