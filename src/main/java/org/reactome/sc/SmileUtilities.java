@@ -1,10 +1,14 @@
 package org.reactome.sc;
 
 import java.awt.Color;
+import java.lang.reflect.Field;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import smile.data.DataFrame;
 import smile.data.vector.BaseVector;
@@ -22,7 +26,8 @@ import smile.plot.swing.ScatterPlot;
  *
  */
 public class SmileUtilities {
-
+    private static final Logger logger = LoggerFactory.getLogger(SmileUtilities.class);
+    
     /**
      * Convert a matrix into a DataFrame object. If it is needed, some of columns
      * may be copied from the passed original DataFrame.
@@ -180,5 +185,21 @@ public class SmileUtilities {
                                              char mark,
                                              Color color) {
         return getScatterPlot(data, x, y, null, mark, color);
+    }
+    
+    public static void setFieldViaReflection(Object obj, 
+                                             String fieldName,
+                                             Object newValue) {
+        try {
+            Class<?> cls = obj.getClass();
+            // Need to use declared field 
+            Field field = cls.getDeclaredField(fieldName);
+            field.setAccessible(true);
+            field.set(obj, newValue);
+//            logger.debug("Reset mouse dragging coordinates.");
+        }
+        catch(Exception e) {
+            logger.error(e.getMessage(), e);
+        }
     }
 }

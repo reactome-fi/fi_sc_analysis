@@ -1,8 +1,19 @@
 package org.reactome.sc;
 
+import java.awt.Component;
+import java.awt.Rectangle;
+import java.awt.event.MouseEvent;
+import java.awt.event.MouseListener;
+import java.awt.event.MouseMotionListener;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Stream;
+
+import javax.swing.JComponent;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import smile.data.DataFrame;
 import smile.math.MathEx;
@@ -18,7 +29,8 @@ import smile.plot.swing.ScatterPlot;
  *
  */
 public class ScScatterPlot extends ScatterPlot {
-    private final int SENSING_DIST = 6;
+    private static final Logger logger = LoggerFactory.getLogger(ScScatterPlot.class);
+    private final int SENSING_DIST = 6; // Radius
     // Need to keep track its own PlotPane
     private Canvas canvas;
     private PlotPanel plotPanel;
@@ -46,6 +58,37 @@ public class ScScatterPlot extends ScatterPlot {
     public void setCanvas(Canvas canvas, PlotPanel plotPane) {
         this.canvas = canvas;
         this.plotPanel = plotPane;
+        customizeMouseListeners();
+    }
+
+    private void customizeMouseListeners() {
+        JComponent canvasPane = getCanvasPane();
+        if (canvasPane == null)
+            return;
+        MouseController controller = new MouseController();
+        MouseListener[] canvasMouseListeners = canvasPane.getMouseListeners();
+        if (canvasMouseListeners != null) {
+            Stream.of(canvasMouseListeners).forEach(l -> canvasPane.removeMouseListener(l));
+            controller.mouseListeners = canvasMouseListeners;
+        }
+        MouseMotionListener[] motionListeners = canvasPane.getMouseMotionListeners();
+        if (motionListeners != null) {
+            Stream.of(motionListeners).forEach(l -> canvasPane.removeMouseMotionListener(l));
+            controller.motionListeners = motionListeners;
+        }
+        canvasPane.addMouseListener(controller);
+        canvasPane.addMouseMotionListener(controller);
+    }
+    
+    private JComponent getCanvasPane() {
+        for (int i = 0; i < plotPanel.getComponentCount(); i ++) {
+            Component comp = plotPanel.getComponent(i);
+            if (comp instanceof JComponent &&
+                comp.getClass().getName().endsWith("JCanvas")) {
+                return (JComponent) comp;
+            }
+        }
+        return null;
     }
     
     private void setMetaInfo(DataFrame df,
@@ -102,6 +145,84 @@ public class ScScatterPlot extends ScatterPlot {
         ratios[0] = (canvas.getUpperBounds()[0] - canvas.getLowerBounds()[0]) / w;
         ratios[1] = (canvas.getUpperBounds()[1] - canvas.getLowerBounds()[1]) / h;
         return ratios;
+    }
+    
+    private class MouseController implements MouseListener, MouseMotionListener {
+        private MouseListener[] mouseListeners;
+        private MouseMotionListener[] motionListeners;
+        private int pressX;
+        private int pressY;
+        private int releaseX;
+        private int releaseY;
+        
+        public MouseController() {
+        }
+        
+        @Override
+        public void mouseClicked(MouseEvent e) {
+            Stream.of(mouseListeners).forEach(l -> l.mouseClicked(e));
+        }
+        
+        public Rectangle getSelectionBox() {
+            Rectangle rect = new Rectangle();
+            rect.x = Math.min(pressX, releaseX);
+            rect.y = Math.min(pressY, releaseY);
+            rect.width = Math.abs(releaseX - pressX);
+            rect.height = Math.abs(releaseY - pressY);
+            return rect;
+        }
+
+        @Override
+        public void mousePressed(MouseEvent e) {
+            pressX = e.getX();
+            pressY = e.getY();
+            // Need to reset these two values
+            SmileUtilities.setFieldViaReflection(e.getSource(),
+                                                 "mouseDraggingX",
+                                                 -1);
+            SmileUtilities.setFieldViaReflection(e.getSource(),
+                                                 "mouseDraggingY",
+                                                 -1);
+            Stream.of(mouseListeners).forEach(l -> l.mousePressed(e));
+        }
+
+        @Override
+        public void mouseReleased(MouseEvent e) {
+            if (e.isAltDown()) {
+                releaseX = e.getX();
+                releaseY = e.getY();
+                logger.debug("Selection box: " + getSelectionBox());
+                return; // We just want to draw the rectangle as a selection
+            }
+            Stream.of(mouseListeners).forEach(l -> l.mouseReleased(e));
+        }
+
+        @Override
+        public void mouseEntered(MouseEvent e) {
+            Stream.of(mouseListeners).forEach(l -> l.mouseEntered(e));
+        }
+
+        @Override
+        public void mouseExited(MouseEvent e) {
+            Stream.of(mouseListeners).forEach(l -> l.mouseExited(e));
+        }
+        
+        @Override
+        public void mouseDragged(MouseEvent e) {
+            // Make sure the mouse dragged is not too sensitive to change the selection
+            // box
+            if (Math.abs(e.getX() - pressX) > 4 &&
+                Math.abs(e.getY() - pressY) > 4) {
+//                System.out.println("Mouse dragged fired: " + e.getX() + ", " + e.getY());
+                Stream.of(motionListeners).forEach(l -> l.mouseDragged(e));
+            }
+        }
+
+        @Override
+        public void mouseMoved(MouseEvent e) {
+            Stream.of(motionListeners).forEach(l -> l.mouseMoved(e));
+        }
+        
     }
     
     /**
