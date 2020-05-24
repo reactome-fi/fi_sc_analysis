@@ -1,5 +1,9 @@
 package org.reactome.sc;
 
+import java.awt.Color;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import smile.data.DataFrame;
@@ -7,6 +11,10 @@ import smile.data.vector.BaseVector;
 import smile.data.vector.DoubleVector;
 import smile.math.matrix.DenseMatrix;
 import smile.math.matrix.Matrix;
+import smile.plot.swing.Legend;
+import smile.plot.swing.Palette;
+import smile.plot.swing.Point;
+import smile.plot.swing.ScatterPlot;
 
 /**
  * Utility methods to make data structure conversion easy.
@@ -116,5 +124,61 @@ public class SmileUtilities {
     public static double[][] getCounts(ScDataFrame df) {
         DenseMatrix matrix = getCountsMatrix(df);
         return convertToArrays(matrix);
+    }
+    
+    /**
+     * This method is a merge of two static methods in the smile's ScatterPlot so that we can enhance the original
+     * ScatterPlot by subclassing it.
+     * @param data
+     * @param x
+     * @param y
+     * @param category
+     * @param mark
+     * @return
+     */
+    private static ScatterPlot getScatterPlot(DataFrame data, 
+                                              String x, 
+                                              String y, 
+                                              String category, 
+                                              char mark,
+                                              Color color) {
+        int ix = data.columnIndex(x);
+        int iy = data.columnIndex(y);
+        double[][] xy = data.stream().map(row -> new double[]{row.getDouble(ix), row.getDouble(iy)}).toArray(double[][]::new);
+        if (category == null)
+            return new ScScatterPlot(new Point(xy, mark, color), data, x, y);
+        String[] label = data.column(category).toStringArray();
+        Map<String, List<Integer>> groups = IntStream.range(0, xy.length).boxed().collect(Collectors.groupingBy(i -> label[i]));
+        Point[] points = new Point[groups.size()];
+        Legend[] legends = new Legend[groups.size()];
+        int k = 0;
+        for (Map.Entry<String, List<Integer>> group : groups.entrySet()) {
+            color = Palette.COLORS[k % Palette.COLORS.length];
+            points[k] = new Point(
+                    group.getValue().stream().map(i -> xy[i]).toArray(double[][]::new),
+                    mark,
+                    color
+            );
+            legends[k] = new Legend(group.getKey(), color);
+            k++;
+        }
+        ScScatterPlot plot = new ScScatterPlot(points, legends, data, x, y, category);
+        return plot;
+    }
+    
+    public static ScatterPlot getScatterPlot(DataFrame data,
+                                            String x,
+                                            String y,
+                                            String category,
+                                            char mark) {
+        return getScatterPlot(data, x, y, category, mark, null);
+    }
+    
+    public static ScatterPlot getScatterPlot(DataFrame data, 
+                                             String x,
+                                             String y, 
+                                             char mark,
+                                             Color color) {
+        return getScatterPlot(data, x, y, null, mark, color);
     }
 }
