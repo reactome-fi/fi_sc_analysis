@@ -28,6 +28,8 @@ import smile.plot.swing.ScatterPlot;
  * @author wug
  *
  */
+//TODO: Need to provide a customzed Canvas to control the rectangle dragging and draw
+// by overwriding Canvas.paint(Graphics, int, int).
 public class ScScatterPlot extends ScatterPlot {
     private static final Logger logger = LoggerFactory.getLogger(ScScatterPlot.class);
     private final int SENSING_DIST = 6; // Radius
