@@ -49,13 +49,33 @@ def get_connectivites() :
     return rtn
 
 def get_cluster() :
+    return get_obs('leiden')
+
+def get_obs(obs_name : str) :
+    """
+    Get the values in the obs data frame for individual cells.
+    :param obs_name:
+    :return:
+    """
     adata = analyzer.get_processed_data()
-    key = 'leiden'
-    if key not in adata.obs.keys() :
-        return "error: no clustering data. Call open_data, preprocess_data, and cluster_data first."
-    # Apparently we have to convert pandas.core.series.Series in to a list of string.
-    # Otherwise, only class type is returned.
-    return adata.obs[key].tolist()
+    if adata is None :
+        return "error: no preprocessed data. Call open_data and preproces_data first."
+    if obs_name not in adata.obs.keys() :
+        return "error: " + obs_name + " is not in the preprocessed data."
+    return adata.obs[obs_name].tolist()
+
+def get_obs_names() :
+    """"
+    Get a list of obs_names.
+    """
+    adata = analyzer.get_processed_data()
+    if adata is None :
+        return "error: no preprocessed data. Call open_data and preproces_data first."
+    rtn = adata.obs.keys().to_list()
+    # # cluster should be handled elsewhere
+    # if 'leiden' in rtn :
+    #     rtn.remove('leiden')
+    return rtn
 
 def get_cell_ids() :
     # Have to use the processed data. Otherwise, cell ids may be too many
@@ -63,6 +83,31 @@ def get_cell_ids() :
     if adata is None :
         return "error: no preprocessed data. Call open_data and preproces_data first."
     return adata.obs.index.to_list()
+
+def rank_genes_groups(groups = 'all',
+                      reference = 'rest',
+                      groupby = 'leiden') -> dict:
+    adata = analyzer.get_processed_data();
+    if adata is None :
+        return "error: no preprocessed data. Call open_data and preproces_data first."
+    analyzer.rank_genes_groups(adata,
+                               groups = groups,
+                               reference = reference,
+                               groupby = groupby)
+    key = 'rank_genes_groups'
+    if key not in adata.uns.keys() :
+        return "error: rank_genes_groups() cannot finish."
+    # Generate a disc for return
+    rtn = dict()
+    for key1 in adata.uns[key] :
+        if key1 is 'params' :
+            continue # Don't need to expose this
+        values = adata.uns[key][key1]
+        values_converted = list()
+        for value in values :
+            values_converted.append(value.tolist())
+        rtn[key1] = values_converted
+    return rtn
 
 def get_paga() :
     adata = analyzer.get_processed_data();
@@ -79,6 +124,39 @@ def get_paga() :
     rtn['connectivities'] = adata.uns[key]['connectivities'].toarray().tolist()
     return rtn
 
+def dpt(root_cell : str) :
+    return analyzer.dpt(root_cell).to_list()
+
+def get_gene_exp(gene : str) :
+    """
+    Get the gene expression value for the passed gene. If there is a raw, use the raw value. Otherwise, use the
+    processed data.
+    :param gene:
+    :return:
+    """
+    adata = analyzer.get_processed_data()
+    if adata is None :
+        adata = analyzer.get_loaded_data()
+    if adata is None :
+        return "error: no data is loaded. Call open_data first."
+    # Check if the query gene is in the var list
+    # We will prefer to use the raw if it is there
+    var_names = None
+    if adata.raw is not None :
+        var_names = adata.raw.var_names
+    else :
+        var_names = adata.var_names
+    if gene not in var_names :
+        return "error: " + gene + " doesn't have any expression data."
+    rtn = None
+    if adata.raw is not None :
+        rtn = adata.raw.obs_vector(gene)
+    else:
+        rtn = adata.obs_vector(gene)
+    if rtn is None :
+        return "error: cannot find expression values for " + gene + "."
+    return rtn.tolist();
+
 def main() :
     # server = SimpleJSONRPCServer(('localhost', 8085))
     server.register_function(open_data)
@@ -89,6 +167,11 @@ def main() :
     server.register_function(get_cell_ids)
     server.register_function(get_connectivites)
     server.register_function(get_paga)
+    server.register_function(get_gene_exp)
+    server.register_function(get_obs)
+    server.register_function(get_obs_names)
+    server.register_function(rank_genes_groups)
+    server.register_function(dpt)
     server.register_function(echo)
     server.register_function(stop)
     logger.info("Start server...")

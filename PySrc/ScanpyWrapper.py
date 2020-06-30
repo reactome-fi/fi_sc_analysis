@@ -127,11 +127,44 @@ def cluster(adata, plot=False) :
     # TODO: This needs to be improved in the future. Two more iterations:
     # 1). Expose the method in the function definition so that the user can choose what method should be used.
     # 2). Use a more sophisticated method: e.g. diffx and something based on ZNBM.
-    sc.tl.rank_genes_groups(adata, 'leiden', method='t-test')
+    # Move this to its own place
+    # sc.tl.rank_genes_groups(adata, 'leiden', method='t-test')
     # tl.umap call should produce the coordinates. If we just need coordinates, there is no need to call the following
     if plot:
         sc.pl.umap(adata, color=['leiden'])
     # There is no need to return adata
+
+def rank_genes_groups(adata,
+                      groupby = 'leiden',
+                      groups = 'all',
+                      reference = 'rest',
+                      method = 't-test_overestim_var') :
+    """
+    Conduct a differential expression analysis for a group of genes.
+    :param adata:
+    :param groupby:
+    :param groups:
+    :param reference:
+    :param method:
+    :return:
+    """
+    # We want to get all genes
+    total_genes = None
+    if adata.raw is not None :
+        total_genes = adata.raw.n_vars
+    else :
+        total_genes = adata.n_vars
+    # Make sure groups is a list
+    if groups is not 'all' and isinstance(groups, str) :
+        groups = [groups]
+    sc.tl.rank_genes_groups(adata,
+                            groupby = groupby,
+                            use_raw = True,
+                            groups = groups,
+                            reference = reference,
+                            rankby_abs = True,
+                            n_genes = total_genes) # Get all genes
+
 
 def reset_paga_pos(adata) -> ndarray:
     """
@@ -151,6 +184,25 @@ def reset_paga_pos(adata) -> ndarray:
         x_pos, y_pos = np.median(selected_umap, axis=0)
         cluster_pos[icluster] = [x_pos, y_pos]
     return cluster_pos
+
+def dpt(root_cell : str) :
+    """
+    Perform dpt analysis with the provided root_cell as the root.
+    :param root_cell:
+    :return:
+    """
+    adata = get_processed_data()
+    if adata is None :
+        raise ValueError("No pre-processed data is avaiable")
+    if root_cell not in adata.obs_names :
+        raise ValueError(root_cell + " is not in the obs_names.")
+    # Get the number index of the root_cell
+    root_index = np.flatnonzero(adata.obs_names == root_cell)[0]
+    adata.uns['iroot'] = root_index
+    sc.tl.dpt(adata)
+    if 'dpt_pseudotime' not in adata.obs.keys() :
+        raise ValueError("Cannot find dpt_pseudotime in the adata's keys.")
+    return adata.obs['dpt_pseudotime']
 
 def project(adata: AnnData,
             adata_ref: AnnData,
@@ -192,6 +244,8 @@ dir_12_5 = "/Users/wug/Documents/missy_single_cell/seq_data_v2/17_5_gfp/filtered
 #adata_17_5 = open_10_genomics_data(dir_17_5)
 #adata_12_5 = open_10_genomics_data(dir_12_5)
 # In python we need to define a function first before we can call it.
-#adata = open_10_genomics_data(dir)
+#adata = open_10_genomics_data(dir_17_5)
+#adata = preprocess(adata)
+#cluster(adata)
+# sc.tl.rank_genes_groups(adata, groupby = 'leiden', groups = ['1'], reference = '0', method = 't-test')
 #print(adata)
-# sc.pl.paga_compare()
