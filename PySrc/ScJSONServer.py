@@ -11,6 +11,20 @@ def open_data(dir_name) :
     # Just return a string for the client
     return str(adata)
 
+def project(dir_name) :
+    adata = analyzer.get_processed_data()
+    if adata is None :
+        return "error: no pre-processed reference data is available."
+    merged_data = analyzer.project(dir_name, adata)
+    analyzer.cache_merged_data(merged_data)
+    # Return the location of UMAP coordinates for new_data.
+    merged_new_data = merged_data[merged_data.obs['batch'] == 'new']
+    zipped = zip(merged_new_data.obs.index.to_list(), merged_new_data.obsm['X_umap'].tolist(), merged_new_data.obs['leiden'].tolist())
+    rtn = dict()
+    for cell, umap, leiden in zipped :
+        rtn[cell] = (umap[0], umap[1], leiden)
+    return rtn
+
 def preprocess_data() :
     adata = analyzer.get_loaded_data()
     if adata is None :
@@ -47,6 +61,13 @@ def get_connectivites() :
     for edge in network.edges :
         rtn.append((str(edge[0]), str(edge[1]), str(network[edge[0]][edge[1]]['weight'])))
     return rtn
+
+def cytotrace() :
+    adata = analyzer.get_processed_data()
+    key = "cytotrace"
+    if key not in adata.obs.keys() :
+        analyzer.cytotrace(adata)
+    return adata.obs[key].tolist()
 
 def get_cluster() :
     return get_obs('leiden')
@@ -110,7 +131,7 @@ def rank_genes_groups(groups = 'all',
     return rtn
 
 def get_paga() :
-    adata = analyzer.get_processed_data();
+    adata = analyzer.get_processed_data()
     key = 'paga'
     if key not in adata.uns.keys() :
         return "error: no clustering data. Call open_data, preprocess_data, and cluster_data first."
@@ -118,13 +139,16 @@ def get_paga() :
     rtn = dict()
     # A list of list of double
     rtn['pos'] = adata.uns[key]['pos'].tolist()
-    # Since this is a graph for clusters and the adjency matrix is not that spase,
+    # Since this is a graph for clusters and the adjacency matrix is not that sparse,
     # using this should be fine. This should be a list of list of double for a n x n
     # matrix (n is the number of clusters)
     rtn['connectivities'] = adata.uns[key]['connectivities'].toarray().tolist()
     return rtn
 
 def dpt(root_cell : str) :
+    adata = analyzer.get_processed_data()
+    if adata is None :
+        return "error: no preprocessed data. Call open_data, preprocess first."
     return analyzer.dpt(root_cell).to_list()
 
 def get_gene_exp(gene : str) :
@@ -157,6 +181,16 @@ def get_gene_exp(gene : str) :
         return "error: cannot find expression values for " + gene + "."
     return rtn.tolist();
 
+def infer_cell_root(*args) :
+    adata = analyzer.get_processed_data()
+    if adata is None :
+        return "error: no preprocessed data. Call open_data, preprocess first."
+    # Generate a list
+    target_clusters = None
+    if len(args) > 0 :
+        target_clusters = args
+    return analyzer.infer_cell_root(adata, target_clusters)
+
 def main() :
     # server = SimpleJSONRPCServer(('localhost', 8085))
     server.register_function(open_data)
@@ -171,7 +205,10 @@ def main() :
     server.register_function(get_obs)
     server.register_function(get_obs_names)
     server.register_function(rank_genes_groups)
+    server.register_function(cytotrace)
+    server.register_function(project)
     server.register_function(dpt)
+    server.register_function(infer_cell_root)
     server.register_function(echo)
     server.register_function(stop)
     logger.info("Start server...")
