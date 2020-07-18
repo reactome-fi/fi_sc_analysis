@@ -149,7 +149,7 @@ def dpt(root_cell : str) :
     adata = analyzer.get_processed_data()
     if adata is None :
         return "error: no preprocessed data. Call open_data, preprocess first."
-    return analyzer.dpt(root_cell).to_list()
+    return analyzer.dpt(adata, root_cell).to_list()
 
 def get_gene_exp(gene : str) :
     """

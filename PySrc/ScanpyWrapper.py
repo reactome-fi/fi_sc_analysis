@@ -123,10 +123,10 @@ def regress(adata, keys = None) :
     # total_counts is included even though cell normalization has been performned.
     # Don't procide any regression-out if the user doesn't want. No-regressing produces the best results with
     # mouse intestinal stem cell data.
-    # if keys is None :
+    if keys is None :
         # keys = ['total_counts']
         # keys = ['pct_counts_mt']
-        # keys = ['total_counts', 'pct_counts_mt']
+        keys = ['total_counts', 'pct_counts_mt']
     if keys is not None :
         sc.pp.regress_out(adata, keys=keys)
     # gene-wise z-score
@@ -441,6 +441,8 @@ dir_12_5 = "/Users/wug/Documents/missy_single_cell/seq_data_v2/12_5_gfp/filtered
 # adata_17_5 = open_10_genomics_data(dir_17_5)
 # adata_17_5 = preprocess(adata_17_5)
 # cluster(adata_17_5)
+# dpt(adata_17_5, 'TTGACCCGTTAGCGGA-1')
+# sc.pl.paga_path(adata_17_5, adata_17_5.obs['leiden'].sort_values(), ['n_genes_by_counts'])
 # cytotrace(adata_17_5)
 # adata_merged = project(dir_12_5, adata_17_5)
 # sc.pl.umap(adata_merged, color = ('leiden', 'n_genes_by_counts', 'cytotrace', 'batch'))
