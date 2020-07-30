@@ -26,6 +26,12 @@ import pandas as pd
 sc.settings.verbosity = 3
 sc.logging.print_versions()
 sc.set_figure_params(dpi = 80, facecolor = 'white')
+# Want to make sure results can be reproducted
+random_state = 17051256
+# Used to mark some preprocess steps
+regressout_uns_key_name = 'regressout_keys'
+imputation_uns_key_name = 'imputation'
+
 
 # Global level flags to control the use of the serve
 # server = SimpleJSONRPCServer("localhost")
@@ -79,14 +85,17 @@ def filter(adata, min_genes = 200, min_cells = 3, copy = False) :
     # Regardless return the object
     return adata
 
-def preprocess(adata, copy=False, need_scale=True, regression_keys = None):
+def preprocess(adata, copy=False, need_scale=True, regressout_keys = None, imputation = None):
     """
         Perform a series of steps to pre-process the data for clustering analysis.
         :param copy: true to make a copy of adata
         :param need_scale:  true for including these steps: slicing to highly_variable, regress_out based on total_counts
         and conduct gene-wise z-score
+        :param imputation: method for doing imputation. Support magic only for the time being.
         :return the client to this method should get the returned adata since the referred object will be changed.
     """
+    if imputation is not None and imputation != 'magic' :
+        raise ValueError("error: imputation method '{}' is not supported.".format(imputation))
     if (copy) :
         adata=adata.copy()
     filter(adata, copy=False) # Regardless we should not copy it
@@ -97,17 +106,25 @@ def preprocess(adata, copy=False, need_scale=True, regression_keys = None):
     sc.pp.calculate_qc_metrics(adata, qc_vars=['mt'], percent_top=None, log1p=False, inplace=True)
     sc.pp.normalize_total(adata)
     sc.pp.log1p(adata)
+    if not need_scale :
+        return adata
+    if imputation is not None and imputation == 'magic' :
+        solver = 'approximate'
+        sc.external.pp.magic(adata, random_state=random_state, solver=solver)
+        # We may get negative value. Move all values if it is
+        min_value = adata.X.min()
+        if min_value < 0 :
+            adata.X -= min_value
+        # Mark for imputation
+        adata.uns[imputation_uns_key_name] = {"method":"magic", "solver":solver, "min_value":min_value}
+    adata.raw = adata # We will use imputated as row if imputation is done.
     # Mark genes with highly_variable flag
     # Default parameters are used in this function call.
     sc.pp.highly_variable_genes(adata)
-    if not need_scale :
-        return adata
-    # Keep the normalized data for future use
-    adata.raw = adata
     # Keep the highly variable genes only.
     # Note: A new adata object is created!
     adata = adata[:, adata.var.highly_variable]
-    regress(adata, keys=regression_keys)
+    regress(adata, keys=regressout_keys)
     return adata
 
 def regress(adata, keys = None) :
@@ -123,12 +140,14 @@ def regress(adata, keys = None) :
     # total_counts is included even though cell normalization has been performned.
     # Don't procide any regression-out if the user doesn't want. No-regressing produces the best results with
     # mouse intestinal stem cell data.
-    if keys is None :
+    # if keys is None :
         # keys = ['total_counts']
         # keys = ['pct_counts_mt']
-        keys = ['total_counts', 'pct_counts_mt']
+        # keys = ['total_counts', 'pct_counts_mt']
     if keys is not None :
         sc.pp.regress_out(adata, keys=keys)
+        # Keep these keys for future use
+        adata.uns[regressout_uns_key_name] = keys
     # gene-wise z-score
     sc.pp.scale(adata, max_value=10)
 
@@ -151,7 +170,6 @@ def cluster(adata, plot=False) :
     # Since we want to use paga for trajectory inference, it will be nicer to do this right now. The performance
     # penality is not that big based on the mouse ISC data set. These procedures are based on the scanpy tutorial.
     # All default paramters are used here.
-    random_state = 1234 # Make sure it can be repeatable
     sc.tl.paga(adata)
     # For some reason, each run may produce a little bit different layout
     sc.pl.paga(adata, plot=False, random_state = random_state) # No need to plot. pl: plot
@@ -259,13 +277,23 @@ def project(new_dir_name: str,
     adata = open_10_genomics_data(new_dir_name)
     # Make sure we do the same thing as in the original data. But we don't want to keep the original data
     adata = preprocess(adata, copy=False, need_scale=False)
+    # Check if we need to do permutation
+    if imputation_uns_key_name in adata_ref.uns_keys() :
+        # support magic only
+        sc.external.pp.magic(adata, solver = adata_ref.uns[imputation_uns_key_name]['solver'])
+        if 'min_value' in adata_ref.uns[imputation_uns_key_name].keys() :
+            adata.X -= adata_ref.uns[imputation_uns_key_name]['min_value'] # Scale up as in the orginal data
     # Make sure both of them have the same set of variables
     shared_var_names = adata_ref.var_names.intersection(adata.var_names)
     sc.logging.info("shared_var_names: {}".format(len(shared_var_names)))
     # slicing the data to make copies
     adata = adata[:, shared_var_names]
     # Call regress here so that we have almost the same number of genes selected by the adata_ref (aka highly invariable genes)
-    regress(adata)
+    regressout_key = None
+    if regressout_uns_key_name in adata.uns_keys() :
+        regressout_key = adata.uns[regressout_uns_key_name]
+        sc.logging.info("Find regressout_keys for projecting: ", str(regressout_key))
+    regress(adata, keys = regressout_key)
     adata_ref = adata_ref[:, shared_var_names]
     # inject based on the leiden
     sc.tl.ingest(adata, adata_ref, obs = 'leiden')
@@ -321,11 +349,17 @@ def cytotrace(adata: AnnData) -> list :
     # Need to convert to array as required by nnls
     sc.logging.info("Running nnls...")
     # print(cell_means) # Just for check
-    nnls_result = optimize.nnls(adata.obsp[connectivities_key].toarray(), cell_means)
+    # Do a normalization as a markov matrix
+    m_matrix = adata.obsp[connectivities_key].copy()
+    m_matrix = m_matrix.multiply(1 / m_matrix.sum(axis=1))
+    nnls_result = optimize.nnls(m_matrix.toarray(), cell_means)
     # nnls_result is tupe. Just need the first element, which is an array
-    regressed_scores = adata.obsp[connectivities_key] * nnls_result[0]
+    regressed_scores = m_matrix * nnls_result[0]
     # regressed_scores = adata.obs[gene_count_key]
-    page_ranks = run_pagerank(adata, connectivities_key, regressed_scores)
+    page_ranks = run_pagerank(adata=adata,
+                              connectivities_key=None,
+                              m_matrix = m_matrix,
+                              scores=regressed_scores)
     # page_ranks is a dict. Scale the value from 0 to 1
     page_ranks_min = min(page_ranks.values())
     page_ranks_max = max(page_ranks.values())
@@ -365,7 +399,10 @@ def infer_cell_root(adata : AnnData,
     leiden_key = 'leiden'
     if leiden_key not in adata.obs.keys() :
         raise ValueError(leiden_key + " is not in the obs names. Run cluster first.")
-    run_pagerank(adata, connectivities_key, adata.obs[gene_count_key])
+    run_pagerank(adata = adata,
+                 connectivities_key = connectivities_key,
+                 m_matrix=None,
+                 scores=adata.obs[gene_count_key])
     # Get cells
     if candidate_clusters is None :
         candidate_clusters = choose_clusters_for_cell_root(adata)
@@ -417,14 +454,19 @@ def choose_clusters_for_cell_root(adata: AnnData) :
 
 
 def run_pagerank(adata: AnnData,
-                 connectivities_key = 'connectivities',
+                 connectivities_key,
+                 m_matrix,
                  scores = None) :
     page_rank_key = 'page_rank'
     if page_rank_key in adata.obs.keys() :
         page_rank = adata.obs_vector('page_rank')
         return dict(zip(np.arange(0, len(page_rank)), page_rank))
     # We will use personalized pagerank for network smooth, which is the same in the original R implementation
-    cell_graph = nx.Graph(adata.obsp[connectivities_key])
+    cell_graph = None
+    if m_matrix is not None :
+        cell_graph = nx.Graph(m_matrix)
+    else :
+        cell_graph = nx.Graph(adata.obsp[connectivities_key])
     if scores is None :
         scores = adata.obs_vector('n_genes_by_counts')
     cell_scores = dict(zip(np.arange(0, len(scores)), scores))
@@ -454,5 +496,3 @@ dir_12_5 = "/Users/wug/Documents/missy_single_cell/seq_data_v2/12_5_gfp/filtered
 # sc.pl.umap(adata_12_5, color = ('leiden', 'n_genes_by_counts'))
 # adata_merged = project(dir_12_5, adata_17_5)
 # sc.pl.umap(adata_merged, color = ('leiden', 'n_genes_by_counts', 'batch'))
-
-
