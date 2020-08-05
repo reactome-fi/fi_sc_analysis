@@ -1,11 +1,41 @@
 from jsonrpclib.SimpleJSONRPCServer import SimpleJSONRPCServer
 import logging as logger
 import ScanpyWrapper as analyzer
-
+import scvelo as scv
 
 def echo(text):
     return "You sent: " + text
 
+def scv_open(file_name) :
+    adata = analyzer.scv_open(file_name)
+    analyzer.cache_data(adata)
+    return str(adata)
+
+def scv_preprocess() :
+    adata = analyzer.get_loaded_data()
+    analyzer.scv_preprocess(adata)
+    # This is the same as the loaded data for scv
+    analyzer.cache_processed_data(adata)
+    return str(adata)
+
+def scv_velocity() :
+    adata = analyzer.get_processed_data()
+    analyzer.scv_velocity(adata)
+    return str(adata)
+
+def scv_embedding(color_key:str) :
+    adata = analyzer.get_processed_data()
+    if color_key is None :
+        color_key = 'leiden'
+    elif color_key not in adata.var_names :
+        return "error: " + color_key + " cannot be found."
+    file_name = color_key + '_umap_embedding.pdf'
+    # Just dump the plot to a file and let the client do whatever it needs
+    # cannot generate a non-blocking interactive plot here.
+    # TODO: Study how to use an async call for the following statement
+    scv.pl.velocity_embedding(adata, color=color_key, show=False, save=file_name)
+    # For some unknown reason, the actual file name having scvelo prefixed
+    return "scvelo_" + file_name
 
 def open_data(dir_name):
     adata = analyzer.open_10_genomics_data(dir_name)
@@ -252,6 +282,10 @@ def main():
     server.register_function(project)
     server.register_function(dpt)
     server.register_function(infer_cell_root)
+    server.register_function(scv_open)
+    server.register_function(scv_preprocess)
+    server.register_function(scv_velocity)
+    server.register_function(scv_embedding)
     server.register_function(echo)
     server.register_function(stop)
     logger.info("Start server...")

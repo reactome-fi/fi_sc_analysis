@@ -21,17 +21,24 @@ from scipy import optimize
 # for pagerank and other stuff
 import networkx as nx
 import pandas as pd
+# for scvelo for RNA verlocity analysis
+import scvelo as scv
 
 # As suggested in the tutorial by scanpy doc: Preprocessing and clustering 3k PBMCs
 sc.settings.verbosity = 3
 sc.logging.print_versions()
-sc.set_figure_params(dpi = 80, facecolor = 'white')
+# To use scvelo's setting below
+#sc.set_figure_params(dpi = 80, facecolor = 'white')
+
+# The following settings are based on https://scvelo.readthedocs.io/VelocityBasics.html
+scv.settings.presenter_view = True
+scv.set_figure_params('scvelo')
+
 # Want to make sure results can be reproducted
 random_state = 17051256
 # Used to mark some preprocess steps
 regressout_uns_key_name = 'regressout_keys'
 imputation_uns_key_name = 'imputation'
-
 
 # Global level flags to control the use of the serve
 # server = SimpleJSONRPCServer("localhost")
@@ -64,6 +71,36 @@ def get_merged_data() :
     if KEY_MERGED not in cache.keys() :
         return None
     return cache[KEY_MERGED]
+
+def scv_open(file_name) :
+    """
+    Open a file for scv RNA verlocity analysis. See https://scvelo.readthedocs.io/VelocityBasics.html
+    for the file format and requirement.
+    :param file_name:
+    :return:
+    """
+    adata = scv.read(file_name, cache=True)
+    adata.var_names_make_unique()
+    return adata
+
+def scv_preprocess(adata) :
+    # Parameters are based on https://scvelo.readthedocs.io/VelocityBasics.html
+    scv.pp.filter_and_normalize(adata, min_shared_cells=20, n_top_genes=2000)
+    # Note: These parameters are different from scanpy clustering where n_pcs = 50 and n_neighbors = 15
+    #TODO: Try to make these two numbers are the same by checking the effect of changing these numbers
+    scv.pp.moments(adata, n_pcs=30, n_neighbors=30)
+
+def scv_velocity(adata) :
+    # Many steps in this function
+    scv.tl.velocity(adata)
+    scv.tl.velocity_graph(adata)
+    sc.tl.leiden(adata)
+    # Use scv for paga
+    scv.tl.paga(adata, groups='leiden')
+    # The following code is similar to cluster()
+    sc.pl.paga(adata, plot=False, random_state = random_state)
+    sc.tl.umap(adata, init_pos='paga', random_state=random_state) # We don't have positions for paga yet
+    adata.uns['paga']['pos'] = reset_paga_pos(adata)
 
 def open_10_genomics_data(dir) :
     """
@@ -480,6 +517,7 @@ def run_pagerank(adata: AnnData,
 # The following is test code and should be removed
 dir_17_5 = "/Users/wug/Documents/missy_single_cell/seq_data_v2/17_5_gfp/filtered_feature_bc_matrix"
 dir_12_5 = "/Users/wug/Documents/missy_single_cell/seq_data_v2/12_5_gfp/filtered_feature_bc_matrix"
+splic_17_file = "/Users/wug/Documents/missy_single_cell/velocity/possorted_genome_bam_DP1YJ_E17_5.loom"
 # adata_17_5 = open_10_genomics_data(dir_17_5)
 # adata_17_5 = preprocess(adata_17_5)
 # cluster(adata_17_5)
@@ -496,3 +534,12 @@ dir_12_5 = "/Users/wug/Documents/missy_single_cell/seq_data_v2/12_5_gfp/filtered
 # sc.pl.umap(adata_12_5, color = ('leiden', 'n_genes_by_counts'))
 # adata_merged = project(dir_12_5, adata_17_5)
 # sc.pl.umap(adata_merged, color = ('leiden', 'n_genes_by_counts', 'batch'))
+# import scvelo as scv
+# adata = scv.read(splic_17_file, cache=True)
+# scv.pp.filter_and_normalize(adata)
+# scv.pp.moments(adata)
+# scv.tl.velocity(adata)
+# sc.tl.umap(adata)
+# sc.tl.leiden(adata)
+# scv.tl.velocity_graph(adata)
+# scv.pl.velocity_embedding(adata, basis='umap', color='leiden', show=False, save)
