@@ -94,6 +94,8 @@ def scv_velocity(adata) :
     # Many steps in this function
     scv.tl.velocity(adata)
     scv.tl.velocity_graph(adata)
+    # To calculate confidence
+    scv.tl.velocity_confidence(adata)
     sc.tl.leiden(adata)
     # Use scv for paga
     scv.tl.paga(adata, groups='leiden')
@@ -517,7 +519,7 @@ def run_pagerank(adata: AnnData,
 # The following is test code and should be removed
 dir_17_5 = "/Users/wug/Documents/missy_single_cell/seq_data_v2/17_5_gfp/filtered_feature_bc_matrix"
 dir_12_5 = "/Users/wug/Documents/missy_single_cell/seq_data_v2/12_5_gfp/filtered_feature_bc_matrix"
-splic_17_file = "/Users/wug/Documents/missy_single_cell/velocity/possorted_genome_bam_DP1YJ_E17_5.loom"
+splice_17_file = "/Users/wug/Documents/missy_single_cell/velocity/possorted_genome_bam_DP1YJ_E17_5.loom"
 # adata_17_5 = open_10_genomics_data(dir_17_5)
 # adata_17_5 = preprocess(adata_17_5)
 # cluster(adata_17_5)

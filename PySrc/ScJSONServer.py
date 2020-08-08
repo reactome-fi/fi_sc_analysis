@@ -124,7 +124,6 @@ def get_connectivites():
         rtn.append((str(edge[0]), str(edge[1]), str(network[edge[0]][edge[1]]['weight'])))
     return rtn
 
-
 def cytotrace():
     adata = analyzer.get_processed_data()
     key = "cytotrace"
@@ -211,9 +210,11 @@ def get_paga():
     # Since this is a graph for clusters and the adjacency matrix is not that sparse,
     # using this should be fine. This should be a list of list of double for a n x n
     # matrix (n is the number of clusters)
-    rtn['connectivities'] = adata.uns[key]['connectivities'].toarray().tolist()
+    edge_key = 'transitions_confidence' # Directed cluster adjacency matrix from velocity analysis
+    if edge_key not in adata.uns['paga'].keys() :
+        edge_key = 'connectivities' # undirected cluster adjacency matrix: symmetric
+    rtn['connectivities'] = adata.uns[key][edge_key].toarray().tolist()
     return rtn
-
 
 def dpt(root_cell: str):
     adata = analyzer.get_processed_data()
