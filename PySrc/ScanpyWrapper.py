@@ -90,19 +90,28 @@ def scv_preprocess(adata) :
     #TODO: Try to make these two numbers are the same by checking the effect of changing these numbers
     scv.pp.moments(adata, n_pcs=30, n_neighbors=30)
 
-def scv_velocity(adata) :
+def scv_velocity(adata,
+                 mode = 'stochastic') : # Default for this model
+    if mode == 'dynamical' :
+        scv.tl.recover_dynamics(adata)
     # Many steps in this function
-    scv.tl.velocity(adata)
+    scv.tl.velocity(adata, mode=mode)
     scv.tl.velocity_graph(adata)
     # To calculate confidence
     scv.tl.velocity_confidence(adata)
+    # To be displayed for S_score and G2M_score
+    scv.tl.score_genes_cell_cycle(adata)
     sc.tl.leiden(adata)
-    # Use scv for paga
+    # specificy for dynamic model
+    if mode == 'dynamical' :
+        scv.tl.latent_time(adata)
+    # Use scv for paga for direction
     scv.tl.paga(adata, groups='leiden')
     # The following code is similar to cluster()
     sc.pl.paga(adata, plot=False, random_state = random_state)
     sc.tl.umap(adata, init_pos='paga', random_state=random_state) # We don't have positions for paga yet
     adata.uns['paga']['pos'] = reset_paga_pos(adata)
+
 
 def open_10_genomics_data(dir) :
     """
