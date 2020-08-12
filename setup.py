@@ -18,12 +18,17 @@ setup(
     license='Apache',
     packages=find_packages(),
     install_requires=[
-        '',
+        'scanpy',
+        'anndata',
+        'networkx',
+        'scvelo',
+
     ],
     extras_require={
         # fill in versions
         'pandas': ['pandas=='],
         'numpy': ['numpy=='],
+        'scipy': ['scipy=='],
     },
     classifiers=[
         'Programming Language :: Python',
