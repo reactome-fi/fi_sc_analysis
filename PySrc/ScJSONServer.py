@@ -33,7 +33,7 @@ def scv_velocity_plot(gene:str) :
 
 def scv_rank_velocity_genes() :
     adata = analyzer.get_processed_data()
-    scv.tl.rank_velocity_genes(adata, groupby='leiden')
+    scv.tl.rank_velocity_genes(adata, groupby='leiden', n_genes=analyzer.n_rank_genes)
     return adata.uns['rank_velocity_genes']['names'].tolist()
 
 def scv_rank_dynamic_genes() :
@@ -41,7 +41,7 @@ def scv_rank_dynamic_genes() :
     # Have to make sure dynamic mode is used for RNA velocity analysis
     if adata.uns['velocity_params']['mode'] != 'dynamical' :
         return "Error: The dynamical mode for RNA velocity analysis must be used to rank dynamic genes."
-    scv.tl.rank_dynamical_genes(adata, groupby='leiden')
+    scv.tl.rank_dynamical_genes(adata, groupby='leiden', n_genes=analyzer.n_rank_genes)
     return adata.uns['rank_dynamical_genes']['names'].tolist()
 
 def scv_embedding(color_key=None) :

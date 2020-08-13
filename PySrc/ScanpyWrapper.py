@@ -39,6 +39,8 @@ random_state = 17051256
 # Used to mark some preprocess steps
 regressout_uns_key_name = 'regressout_keys'
 imputation_uns_key_name = 'imputation'
+# 250 is a good number for pathway and network analysis. So far hard-code it.
+n_rank_genes = 250
 
 # Global level flags to control the use of the serve
 # server = SimpleJSONRPCServer("localhost")
