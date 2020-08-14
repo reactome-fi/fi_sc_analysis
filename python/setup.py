@@ -6,32 +6,38 @@ with open("README.md", "r") as f:
     long_description = f.read()
 
 setup(
-    name='name of package',
+    # replace name of package (dir) to be what is desired for pip install "name" ex. reactomeSC (PEP8 naming convention)
+    name='PySrc',
     version=__version__,
-    description='python service for single cell analysis in reactome',
+    description='python service for single cell analysis in Reactome',
     long_description=long_description,
     long_description_content_type='text/markdown',
     url='https://github.com/reactome-fi/fi_sc_analysis',
     author='Guanming Wu',
     author_email='wu@ohsu.edu',
-    # which license ?
     license='Apache',
     packages=find_packages(),
     install_requires=[
-        'scanpy',
-        'anndata',
-        'networkx',
-        'scvelo',
-
+        'jsonrpclib-pelix>=0.4.1'
+        'scanpy>=1.5.1',
+        'networkx>=4.4.2',
+        'scvelo>=0.2.2',
+        'python-igraph>=0.8.2',
+        'scikit-learn>=0.22',  # 0.23 may still be unstable
+        'leidenalg>=0.8.1',
+        'umap>=0.1.1',
     ],
     extras_require={
-        # fill in versions
-        'pandas': ['pandas=='],
-        'numpy': ['numpy=='],
-        'scipy': ['scipy=='],
+        'pandas': ['pandas>=1.1.0'],
+        'numpy': ['numpy>=1.19.1'],
+        'scipy': ['scipy>=1.5.2'],
+        'anndata': ['anndata>=0.7.4'],
+        'statsmodels': ['statsmodels>=0.12.0rc0'],
     },
     classifiers=[
         'Programming Language :: Python',
+        'Programming Language :: Python :: 3.6',
+        'Programming Language :: Python :: 3.7',
         'License :: OSI Approved :: Apache Software License',
         'Intended Audience :: Developers',
         'Intended Audience :: Science/Research',
@@ -40,6 +46,5 @@ setup(
         'Topic :: Scientific/Engineering :: Bio-Informatics'
     ],
     platforms=['any'],
-    # which python version
-    python_requires='>=3.8',
+    python_requires='>=3.6.9',
 )
