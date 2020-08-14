@@ -18,12 +18,33 @@ def scv_preprocess() :
     analyzer.cache_processed_data(adata)
     return str(adata)
 
-def scv_velocity() :
+def scv_velocity(mode) :
     adata = analyzer.get_processed_data()
-    analyzer.scv_velocity(adata)
+    analyzer.scv_velocity(adata, mode = mode)
     return str(adata)
 
-def scv_embedding(color_key:str) :
+def scv_velocity_plot(gene:str) :
+    adata = analyzer.get_processed_data()
+    if gene not in adata.var_names:
+        return "error: " + gene + " cannot be found."
+    file_name = gene + '_velocity.pdf'
+    scv.pl.velocity(adata, gene, color='leiden', show = False, save = file_name)
+    return "scvelo_" + file_name
+
+def scv_rank_velocity_genes() :
+    adata = analyzer.get_processed_data()
+    scv.tl.rank_velocity_genes(adata, groupby='leiden', n_genes=analyzer.n_rank_genes)
+    return adata.uns['rank_velocity_genes']['names'].tolist()
+
+def scv_rank_dynamic_genes() :
+    adata = analyzer.get_processed_data()
+    # Have to make sure dynamic mode is used for RNA velocity analysis
+    if adata.uns['velocity_params']['mode'] != 'dynamical' :
+        return "Error: The dynamical mode for RNA velocity analysis must be used to rank dynamic genes."
+    scv.tl.rank_dynamical_genes(adata, groupby='leiden', n_genes=analyzer.n_rank_genes)
+    return adata.uns['rank_dynamical_genes']['names'].tolist()
+
+def scv_embedding(color_key=None) :
     adata = analyzer.get_processed_data()
     if color_key is None :
         color_key = 'leiden'
@@ -33,7 +54,35 @@ def scv_embedding(color_key:str) :
     # Just dump the plot to a file and let the client do whatever it needs
     # cannot generate a non-blocking interactive plot here.
     # TODO: Study how to use an async call for the following statement
-    scv.pl.velocity_embedding(adata, color=color_key, show=False, save=file_name)
+    scv.pl.velocity_embedding(adata, basis="umap", color=color_key, show=False, save=file_name)
+    # For some unknown reason, the actual file name having scvelo prefixed
+    return "scvelo_" + file_name
+
+def scv_embedding_grid(color_key=None) :
+    adata = analyzer.get_processed_data()
+    if color_key is None :
+        color_key = 'leiden'
+    elif color_key not in adata.var_names :
+        return "error: " + color_key + " cannot be found."
+    file_name = color_key + '_umap_embedding_grid.pdf'
+    # Just dump the plot to a file and let the client do whatever it needs
+    # cannot generate a non-blocking interactive plot here.
+    # TODO: Study how to use an async call for the following statement
+    scv.pl.velocity_embedding_grid(adata, basis="umap", color=color_key, show=False, save=file_name)
+    # For some unknown reason, the actual file name having scvelo prefixed
+    return "scvelo_" + file_name
+
+def scv_embedding_stream(color_key=None) :
+    adata = analyzer.get_processed_data()
+    if color_key is None :
+        color_key = 'leiden'
+    elif color_key not in adata.var_names :
+        return "error: " + color_key + " cannot be found."
+    file_name = color_key + '_umap_embedding_stream.png'
+    # Just dump the plot to a file and let the client do whatever it needs
+    # cannot generate a non-blocking interactive plot here.
+    # TODO: Study how to use an async call for the following statement
+    scv.pl.velocity_embedding_stream(adata, basis="umap", color=color_key, show=False, save=file_name)
     # For some unknown reason, the actual file name having scvelo prefixed
     return "scvelo_" + file_name
 
@@ -287,6 +336,11 @@ def main():
     server.register_function(scv_preprocess)
     server.register_function(scv_velocity)
     server.register_function(scv_embedding)
+    server.register_function(scv_embedding_grid)
+    server.register_function(scv_embedding_stream)
+    server.register_function(scv_velocity_plot)
+    server.register_function(scv_rank_velocity_genes)
+    server.register_function(scv_rank_dynamic_genes)
     server.register_function(echo)
     server.register_function(stop)
     logger.info("Start server...")
