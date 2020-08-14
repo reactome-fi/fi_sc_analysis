@@ -142,3 +142,6 @@ cython_debug/
 
 .idea/
 
+# Pyre type checker
+
+.DS_Store

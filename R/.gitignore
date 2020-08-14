@@ -1,7 +1,5 @@
 /.RData
 /.Rhistory
-
-
 #########################
 # R
 #########################
@@ -50,3 +48,5 @@ docs/
 
 # translation temp files
 po/*~
+
+.DS_Store
