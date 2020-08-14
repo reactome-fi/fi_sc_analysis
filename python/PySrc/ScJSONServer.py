@@ -3,52 +3,60 @@ import logging as logger
 import ScanpyWrapper as analyzer
 import scvelo as scv
 
+
 def echo(text):
     return "You sent: " + text
 
-def scv_open(file_name) :
+
+def scv_open(file_name):
     adata = analyzer.scv_open(file_name)
     analyzer.cache_data(adata)
     return str(adata)
 
-def scv_preprocess() :
+
+def scv_preprocess():
     adata = analyzer.get_loaded_data()
     analyzer.scv_preprocess(adata)
     # This is the same as the loaded data for scv
     analyzer.cache_processed_data(adata)
     return str(adata)
 
-def scv_velocity(mode) :
+
+def scv_velocity(mode):
     adata = analyzer.get_processed_data()
-    analyzer.scv_velocity(adata, mode = mode)
+    analyzer.scv_velocity(adata, mode=mode)
     return str(adata)
 
-def scv_velocity_plot(gene:str) :
+
+def scv_velocity_plot(gene: str):
     adata = analyzer.get_processed_data()
     if gene not in adata.var_names:
         return "error: " + gene + " cannot be found."
     file_name = gene + '_velocity.pdf'
-    scv.pl.velocity(adata, gene, color='leiden', show = False, save = file_name)
+    scv.pl.velocity(adata, gene, color='leiden', show=False, save=file_name)
     return "scvelo_" + file_name
 
-def scv_rank_velocity_genes() :
+
+def scv_rank_velocity_genes():
     adata = analyzer.get_processed_data()
     scv.tl.rank_velocity_genes(adata, groupby='leiden', n_genes=analyzer.n_rank_genes)
     return adata.uns['rank_velocity_genes']['names'].tolist()
 
-def scv_rank_dynamic_genes() :
+
+def scv_rank_dynamic_genes():
     adata = analyzer.get_processed_data()
     # Have to make sure dynamic mode is used for RNA velocity analysis
-    if adata.uns['velocity_params']['mode'] != 'dynamical' :
+    if adata.uns['velocity_params']['mode'] != 'dynamical':
         return "Error: The dynamical mode for RNA velocity analysis must be used to rank dynamic genes."
     scv.tl.rank_dynamical_genes(adata, groupby='leiden', n_genes=analyzer.n_rank_genes)
     return adata.uns['rank_dynamical_genes']['names'].tolist()
 
-def scv_embedding(color_key=None) :
+
+def scv_embedding(color_key=None):
     adata = analyzer.get_processed_data()
-    if color_key is None :
+    if color_key is None:
         color_key = 'leiden'
-    elif color_key not in adata.var_names :
+    elif color_key not in adata.var_names:
         return "error: " + color_key + " cannot be found."
     file_name = color_key + '_umap_embedding.pdf'
     # Just dump the plot to a file and let the client do whatever it needs
@@ -58,11 +66,12 @@ def scv_embedding(color_key=None) :
     # For some unknown reason, the actual file name having scvelo prefixed
     return "scvelo_" + file_name
 
-def scv_embedding_grid(color_key=None) :
+
+def scv_embedding_grid(color_key=None):
     adata = analyzer.get_processed_data()
-    if color_key is None :
+    if color_key is None:
         color_key = 'leiden'
-    elif color_key not in adata.var_names :
+    elif color_key not in adata.var_names:
         return "error: " + color_key + " cannot be found."
     file_name = color_key + '_umap_embedding_grid.pdf'
     # Just dump the plot to a file and let the client do whatever it needs
@@ -72,11 +81,12 @@ def scv_embedding_grid(color_key=None) :
     # For some unknown reason, the actual file name having scvelo prefixed
     return "scvelo_" + file_name
 
-def scv_embedding_stream(color_key=None) :
+
+def scv_embedding_stream(color_key=None):
     adata = analyzer.get_processed_data()
-    if color_key is None :
+    if color_key is None:
         color_key = 'leiden'
-    elif color_key not in adata.var_names :
+    elif color_key not in adata.var_names:
         return "error: " + color_key + " cannot be found."
     file_name = color_key + '_umap_embedding_stream.png'
     # Just dump the plot to a file and let the client do whatever it needs
@@ -85,6 +95,7 @@ def scv_embedding_stream(color_key=None) :
     scv.pl.velocity_embedding_stream(adata, basis="umap", color=color_key, show=False, save=file_name)
     # For some unknown reason, the actual file name having scvelo prefixed
     return "scvelo_" + file_name
+
 
 def open_data(dir_name):
     adata = analyzer.open_10_genomics_data(dir_name)
@@ -123,10 +134,10 @@ def preprocess_data(regress_out_keys=None,
             regress_out_keys = None
         else:
             regress_out_keys = str.split(regress_out_keys, ",")
-    if imputation is not None :
-        if len(imputation) == 0 :
+    if imputation is not None:
+        if len(imputation) == 0:
             imputation = None
-        elif imputation != 'magic' :
+        elif imputation != 'magic':
             return "error: The supported imputation method is 'magic' only!"
     print("imputation: ", imputation)
     print("regress_out_keys: ", regress_out_keys)
@@ -172,6 +183,7 @@ def get_connectivites():
     for edge in network.edges:
         rtn.append((str(edge[0]), str(edge[1]), str(network[edge[0]][edge[1]]['weight'])))
     return rtn
+
 
 def cytotrace():
     adata = analyzer.get_processed_data()
@@ -259,11 +271,12 @@ def get_paga():
     # Since this is a graph for clusters and the adjacency matrix is not that sparse,
     # using this should be fine. This should be a list of list of double for a n x n
     # matrix (n is the number of clusters)
-    edge_key = 'transitions_confidence' # Directed cluster adjacency matrix from velocity analysis
-    if edge_key not in adata.uns['paga'].keys() :
-        edge_key = 'connectivities' # undirected cluster adjacency matrix: symmetric
+    edge_key = 'transitions_confidence'  # Directed cluster adjacency matrix from velocity analysis
+    if edge_key not in adata.uns['paga'].keys():
+        edge_key = 'connectivities'  # undirected cluster adjacency matrix: symmetric
     rtn['connectivities'] = adata.uns[key][edge_key].toarray().tolist()
     return rtn
+
 
 def dpt(root_cell: str):
     adata = analyzer.get_processed_data()
