@@ -227,7 +227,7 @@ def get_obs_names():
 
 def get_cell_ids():
     # Have to use the processed data. Otherwise, cell ids may be too many
-    adata = analyzer.get_processed_data();
+    adata = analyzer.get_processed_data()
     if adata is None:
         return "error: no preprocessed data. Call open_data and preproces_data first."
     return adata.obs.index.to_list()
@@ -236,7 +236,7 @@ def get_cell_ids():
 def rank_genes_groups(groups='all',
                       reference='rest',
                       groupby='leiden') -> dict:
-    adata = analyzer.get_processed_data();
+    adata = analyzer.get_processed_data()
     if adata is None:
         return "error: no preprocessed data. Call open_data and preproces_data first."
     analyzer.rank_genes_groups(adata,
@@ -313,7 +313,7 @@ def get_gene_exp(gene: str):
         rtn = adata.obs_vector(gene)
     if rtn is None:
         return "error: cannot find expression values for " + gene + "."
-    return rtn.tolist();
+    return rtn.tolist()
 
 
 def infer_cell_root(*args):
