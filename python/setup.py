@@ -18,13 +18,13 @@ setup(
     license='Apache',
     packages=find_packages(),
     install_requires=[
-        'jsonrpclib-pelix>=0.4.1'
+        'jsonrpclib-pelix>=0.4.1',
         'scanpy>=1.5.1',
-        'networkx>=4.4.2',
+        'networkx>=2.4',
         'scvelo>=0.2.2',
         'python-igraph>=0.8.2',
         'scikit-learn>=0.22',  # 0.23 may still be unstable
-        'leidenalg>=0.8.1',
+        'leidenalg>=0.8.1', # issue with igraph dep
         'umap>=0.1.1',
     ],
     extras_require={
