@@ -24,7 +24,7 @@ setup(
         'scvelo>=0.2.2',
         'python-igraph>=0.8.2',
         'scikit-learn>=0.22',  # 0.23 may still be unstable
-        'leidenalg>=0.8.1', # issue with igraph dep
+        'leidenalg>=0.8.1',
         'umap>=0.1.1',
     ],
     extras_require={
