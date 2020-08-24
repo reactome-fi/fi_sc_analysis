@@ -2,6 +2,7 @@ from jsonrpclib.SimpleJSONRPCServer import SimpleJSONRPCServer
 import logging as logger
 import ScanpyWrapper as analyzer
 import scvelo as scv
+import scanpy as sc
 
 def echo(text):
     return "You sent: " + text
@@ -92,12 +93,34 @@ def open_data(dir_name):
     # Just return a string for the client
     return str(adata)
 
+def open_analyzed_data(file_name:str) -> str:
+    """
+    Open a processed adata writted by function write_data below.
+    :param file_name:
+    :return:
+    """
+    adata = sc.read(file_name)
+    analyzer.cache_processed_data(adata)
+    return str(adata)
 
-def project(dir_name):
+def write_data(file_name:str) -> str:
+    """
+    Write the loaded data into a file in the h5ad format
+    :param file_name:
+    :return:
+    """
+    adata = analyzer.get_processed_data()
+    if adata is None:
+        return "error: no data loaded for writing."
+    adata.write(file_name, compression='gzip')
+    return str(adata) # for debug purpose
+
+def project(dir_name,
+            scv = False):
     adata = analyzer.get_processed_data()
     if adata is None:
         return "error: no pre-processed reference data is available."
-    merged_data = analyzer.project(dir_name, adata)
+    merged_data = analyzer.project(dir_name, adata, scv)
     analyzer.cache_merged_data(merged_data)
     # Return the location of UMAP coordinates for new_data.
     merged_new_data = merged_data[merged_data.obs['batch'] == 'new']
@@ -107,7 +130,6 @@ def project(dir_name):
     for cell, umap, leiden in zipped:
         rtn[cell] = (umap[0], umap[1], leiden)
     return rtn
-
 
 def preprocess_data(regress_out_keys=None,
                     imputation: str = 'magic'):
@@ -317,6 +339,8 @@ def infer_cell_root(*args):
 def main():
     # server = SimpleJSONRPCServer(('localhost', 8085))
     server.register_function(open_data)
+    server.register_function(write_data)
+    server.register_function(open_analyzed_data)
     server.register_function(preprocess_data)
     server.register_function(cluster_data)
     server.register_function(get_umap)

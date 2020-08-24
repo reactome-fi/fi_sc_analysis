@@ -58,7 +58,7 @@ def get_loaded_data() :
 def cache_data(adata: AnnData) :
     cache[KEY_DATA] = adata
 
-def get_processed_data() :
+def get_processed_data() -> AnnData:
     if KEY_PROCESSED not in cache.keys() :
         return None
     return cache[KEY_PROCESSED]
@@ -86,8 +86,18 @@ def scv_open(file_name) :
     return adata
 
 def scv_preprocess(adata) :
-    # Parameters are based on https://scvelo.readthedocs.io/VelocityBasics.html
-    scv.pp.filter_and_normalize(adata, min_shared_cells=20, n_top_genes=2000)
+    # scv.pp.filter_and_normalize(adata,
+    #                             min_shared_counts=10,
+    #                             min_shared_cells=3, # This is the same in the filter
+    #                             n_top_genes=2000)
+    # Run the above function separately so that we can get the raw data
+    scv.pp.filter_genes(adata, min_shared_counts=10, min_shared_cells=3)
+    scv.pp.normalize_per_cell(adata)
+    adata_copy = adata.copy()
+    scv.pp.log1p(adata_copy)
+    adata.raw = adata_copy  # We want to keep the data before filtering out genes for GSEA analysis
+    scv.pp.filter_genes_dispersion(adata, n_top_genes=2000)
+    scv.pp.log1p(adata)
     # Note: These parameters are different from scanpy clustering where n_pcs = 50 and n_neighbors = 15
     #TODO: Try to make these two numbers are the same by checking the effect of changing these numbers
     scv.pp.moments(adata, n_pcs=30, n_neighbors=30)
@@ -103,7 +113,7 @@ def scv_velocity(adata,
     scv.tl.velocity_confidence(adata)
     # To be displayed for S_score and G2M_score
     scv.tl.score_genes_cell_cycle(adata)
-    sc.tl.leiden(adata)
+    sc.tl.leiden(adata, random_state=random_state)
     # specificy for dynamic model
     if mode == 'dynamical' :
         scv.tl.latent_time(adata)
@@ -113,7 +123,6 @@ def scv_velocity(adata,
     sc.pl.paga(adata, plot=False, random_state = random_state)
     sc.tl.umap(adata, init_pos='paga', random_state=random_state) # We don't have positions for paga yet
     adata.uns['paga']['pos'] = reset_paga_pos(adata)
-
 
 def open_10_genomics_data(dir) :
     """
@@ -166,7 +175,7 @@ def preprocess(adata, copy=False, need_scale=True, regressout_keys = None, imput
         if min_value < 0 :
             adata.X -= min_value
         # Mark for imputation
-        adata.uns[imputation_uns_key_name] = {"method":"magic", "solver":solver, "min_value":min_value}
+        adata.uns[imputation_uns_key_name] = {"method": "magic", "solver": solver, "min_value": min_value}
     adata.raw = adata # We will use imputated as row if imputation is done.
     # Mark genes with highly_variable flag
     # Default parameters are used in this function call.
@@ -216,7 +225,7 @@ def cluster(adata, plot=False) :
     sc.pp.neighbors(adata) # pp: preprocess
     # clustering using the Leiden algorithm. The clustering should be run first before the following paga
     # related statements
-    sc.tl.leiden(adata)
+    sc.tl.leiden(adata, random_state=random_state)
     # Since we want to use paga for trajectory inference, it will be nicer to do this right now. The performance
     # penality is not that big based on the mouse ISC data set. These procedures are based on the scanpy tutorial.
     # All default paramters are used here.
@@ -310,6 +319,7 @@ def dpt(adata: AnnData,
 
 def project(new_dir_name: str,
             adata_ref: AnnData,
+            scv: bool = False,
             batch_categories: Optional[str] = None,
 )->AnnData:
     """
@@ -318,32 +328,39 @@ def project(new_dir_name: str,
     preprocess function but with need_scale false.
     :param new_dir_name: the data directory to be projected
     :param adata_ref: the reference data
+    :param scv: true for scv-based RNA velocity analysis
     :param batch_categories: the name for the reference should be the first element
     :return: return a merged AnnData object with two originally data copied and merged.
     """
     # Check if leiden has been conducted.
     if 'leiden' not in adata_ref.obs :
-        cluster(adata_ref)
-    adata = open_10_genomics_data(new_dir_name)
-    # Make sure we do the same thing as in the original data. But we don't want to keep the original data
-    adata = preprocess(adata, copy=False, need_scale=False)
-    # Check if we need to do permutation
-    if imputation_uns_key_name in adata_ref.uns_keys() :
-        # support magic only
-        sc.external.pp.magic(adata, solver = adata_ref.uns[imputation_uns_key_name]['solver'])
-        if 'min_value' in adata_ref.uns[imputation_uns_key_name].keys() :
-            adata.X -= adata_ref.uns[imputation_uns_key_name]['min_value'] # Scale up as in the orginal data
+        return "error: run cluster first for the reference data."
+    adata = None
+    if scv :
+        adata = scv_open(new_dir_name)
+        scv_preprocess(adata)
+    else :
+        adata = open_10_genomics_data(new_dir_name)
+        # Make sure we do the same thing as in the original data. But we don't want to keep the original data
+        adata = preprocess(adata, copy=False, need_scale=False)
+        # Check if we need to do permutation
+        if imputation_uns_key_name in adata_ref.uns_keys() :
+            # support magic only
+            sc.external.pp.magic(adata, solver = adata_ref.uns[imputation_uns_key_name]['solver'])
+            if 'min_value' in adata_ref.uns[imputation_uns_key_name].keys() :
+                adata.X -= adata_ref.uns[imputation_uns_key_name]['min_value'] # Scale up as in the orginal data
     # Make sure both of them have the same set of variables
     shared_var_names = adata_ref.var_names.intersection(adata.var_names)
     sc.logging.info("shared_var_names: {}".format(len(shared_var_names)))
     # slicing the data to make copies
     adata = adata[:, shared_var_names]
-    # Call regress here so that we have almost the same number of genes selected by the adata_ref (aka highly invariable genes)
-    regressout_key = None
-    if regressout_uns_key_name in adata.uns_keys() :
-        regressout_key = adata.uns[regressout_uns_key_name]
-        sc.logging.info("Find regressout_keys for projecting: ", str(regressout_key))
-    regress(adata, keys = regressout_key)
+    if not scv :
+        # Call regress here so that we have almost the same number of genes selected by the adata_ref (aka highly invariable genes)
+        regressout_key = None
+        if regressout_uns_key_name in adata.uns_keys() :
+            regressout_key = adata.uns[regressout_uns_key_name]
+            sc.logging.info("Find regressout_keys for projecting: ", str(regressout_key))
+        regress(adata, keys = regressout_key)
     adata_ref = adata_ref[:, shared_var_names]
     # inject based on the leiden
     sc.tl.ingest(adata, adata_ref, obs = 'leiden')
