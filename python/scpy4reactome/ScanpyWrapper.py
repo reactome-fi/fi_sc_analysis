@@ -28,7 +28,7 @@ import scvelo as scv
 sc.settings.verbosity = 3
 sc.logging.print_versions()
 # To use scvelo's setting below
-#sc.set_figure_params(dpi = 80, facecolor = 'white')
+# sc.set_figure_params(dpi = 80, facecolor = 'white')
 
 # The following settings are based on https://scvelo.readthedocs.io/VelocityBasics.html
 scv.settings.presenter_view = True
@@ -50,31 +50,38 @@ n_rank_genes = 250
 cache = dict()
 KEY_DATA, KEY_PROCESSED, KEY_MERGED = 'adata', 'processed', 'merged'
 
-def get_loaded_data() :
-    if KEY_DATA not in cache.keys() :
+
+def get_loaded_data():
+    if KEY_DATA not in cache.keys():
         return None
     return cache[KEY_DATA]
 
-def cache_data(adata: AnnData) :
+
+def cache_data(adata: AnnData):
     cache[KEY_DATA] = adata
 
+
 def get_processed_data() -> AnnData:
-    if KEY_PROCESSED not in cache.keys() :
+    if KEY_PROCESSED not in cache.keys():
         return None
     return cache[KEY_PROCESSED]
 
-def cache_processed_data(adata: AnnData) :
+
+def cache_processed_data(adata: AnnData):
     cache[KEY_PROCESSED] = adata
 
-def cache_merged_data(adata: AnnData) :
+
+def cache_merged_data(adata: AnnData):
     cache[KEY_MERGED] = adata
 
-def get_merged_data() :
-    if KEY_MERGED not in cache.keys() :
+
+def get_merged_data():
+    if KEY_MERGED not in cache.keys():
         return None
     return cache[KEY_MERGED]
 
-def scv_open(file_name) :
+
+def scv_open(file_name):
     """
     Open a file for scv RNA verlocity analysis. See https://scvelo.readthedocs.io/VelocityBasics.html
     for the file format and requirement.
@@ -85,7 +92,8 @@ def scv_open(file_name) :
     adata.var_names_make_unique()
     return adata
 
-def scv_preprocess(adata) :
+
+def scv_preprocess(adata):
     # scv.pp.filter_and_normalize(adata,
     #                             min_shared_counts=10,
     #                             min_shared_cells=3, # This is the same in the filter
@@ -99,12 +107,13 @@ def scv_preprocess(adata) :
     scv.pp.filter_genes_dispersion(adata, n_top_genes=2000)
     scv.pp.log1p(adata)
     # Note: These parameters are different from scanpy clustering where n_pcs = 50 and n_neighbors = 15
-    #TODO: Try to make these two numbers are the same by checking the effect of changing these numbers
+    # TODO: Try to make these two numbers are the same by checking the effect of changing these numbers
     scv.pp.moments(adata, n_pcs=30, n_neighbors=30)
 
+
 def scv_velocity(adata,
-                 mode = 'stochastic') : # Default for this model
-    if mode == 'dynamical' :
+                 mode='stochastic'):  # Default for this model
+    if mode == 'dynamical':
         scv.tl.recover_dynamics(adata)
     # Many steps in this function
     scv.tl.velocity(adata, mode=mode)
@@ -115,16 +124,17 @@ def scv_velocity(adata,
     scv.tl.score_genes_cell_cycle(adata)
     sc.tl.leiden(adata, random_state=random_state)
     # specificy for dynamic model
-    if mode == 'dynamical' :
+    if mode == 'dynamical':
         scv.tl.latent_time(adata)
     # Use scv for paga for direction
     scv.tl.paga(adata, groups='leiden')
     # The following code is similar to cluster()
-    sc.pl.paga(adata, plot=False, random_state = random_state)
-    sc.tl.umap(adata, init_pos='paga', random_state=random_state) # We don't have positions for paga yet
+    sc.pl.paga(adata, plot=False, random_state=random_state)
+    sc.tl.umap(adata, init_pos='paga', random_state=random_state)  # We don't have positions for paga yet
     adata.uns['paga']['pos'] = reset_paga_pos(adata)
 
-def open_10_genomics_data(dir) :
+
+def open_10_genomics_data(dir):
     """
         Open a 10x genomics data into an annadata object.
     """
@@ -132,19 +142,21 @@ def open_10_genomics_data(dir) :
     adata.var_names_make_unique()
     return adata
 
-def filter(adata, min_genes = 200, min_cells = 3, copy = False) :
+
+def filter(adata, min_genes=200, min_cells=3, copy=False):
     """
         Perform a simple filtering by remove cells having less than min_genes and genes having less than
         min_cells.
     """
-    if (copy) :
+    if (copy):
         adata = adata.copy()
-    sc.pp.filter_cells(adata, min_genes = min_genes)
-    sc.pp.filter_genes(adata, min_cells = min_cells)
+    sc.pp.filter_cells(adata, min_genes=min_genes)
+    sc.pp.filter_genes(adata, min_cells=min_cells)
     # Regardless return the object
     return adata
 
-def preprocess(adata, copy=False, need_scale=True, regressout_keys = None, imputation = None):
+
+def preprocess(adata, copy=False, need_scale=True, regressout_keys=None, imputation=None):
     """
         Perform a series of steps to pre-process the data for clustering analysis.
         :param copy: true to make a copy of adata
@@ -153,11 +165,11 @@ def preprocess(adata, copy=False, need_scale=True, regressout_keys = None, imput
         :param imputation: method for doing imputation. Support magic only for the time being.
         :return the client to this method should get the returned adata since the referred object will be changed.
     """
-    if imputation is not None and imputation != 'magic' :
+    if imputation is not None and imputation != 'magic':
         raise ValueError("error: imputation method '{}' is not supported.".format(imputation))
-    if (copy) :
-        adata=adata.copy()
-    filter(adata, copy=False) # Regardless we should not copy it
+    if (copy):
+        adata = adata.copy()
+    filter(adata, copy=False)  # Regardless we should not copy it
     # Check mitochondrial genes to make sure they don't interfere our analysis
     # To support both human and mouse genes
     adata.var['mt'] = adata.var_names.str.startswith('MT-') | adata.var_names.str.startswith('mt-')
@@ -165,18 +177,18 @@ def preprocess(adata, copy=False, need_scale=True, regressout_keys = None, imput
     sc.pp.calculate_qc_metrics(adata, qc_vars=['mt'], percent_top=None, log1p=False, inplace=True)
     sc.pp.normalize_total(adata)
     sc.pp.log1p(adata)
-    if not need_scale :
+    if not need_scale:
         return adata
-    if imputation is not None and imputation == 'magic' :
+    if imputation is not None and imputation == 'magic':
         solver = 'approximate'
         sc.external.pp.magic(adata, random_state=random_state, solver=solver)
         # We may get negative value. Move all values if it is
         min_value = adata.X.min()
-        if min_value < 0 :
+        if min_value < 0:
             adata.X -= min_value
         # Mark for imputation
         adata.uns[imputation_uns_key_name] = {"method": "magic", "solver": solver, "min_value": min_value}
-    adata.raw = adata # We will use imputated as row if imputation is done.
+    adata.raw = adata  # We will use imputated as row if imputation is done.
     # Mark genes with highly_variable flag
     # Default parameters are used in this function call.
     sc.pp.highly_variable_genes(adata)
@@ -186,7 +198,8 @@ def preprocess(adata, copy=False, need_scale=True, regressout_keys = None, imput
     regress(adata, keys=regressout_keys)
     return adata
 
-def regress(adata, keys = None) :
+
+def regress(adata, keys=None):
     """
     Conduct an optional regress
     :param adata:
@@ -200,17 +213,18 @@ def regress(adata, keys = None) :
     # Don't procide any regression-out if the user doesn't want. No-regressing produces the best results with
     # mouse intestinal stem cell data.
     # if keys is None :
-        # keys = ['total_counts']
-        # keys = ['pct_counts_mt']
-        # keys = ['total_counts', 'pct_counts_mt']
-    if keys is not None :
+    # keys = ['total_counts']
+    # keys = ['pct_counts_mt']
+    # keys = ['total_counts', 'pct_counts_mt']
+    if keys is not None:
         sc.pp.regress_out(adata, keys=keys)
         # Keep these keys for future use
         adata.uns[regressout_uns_key_name] = keys
     # gene-wise z-score
     sc.pp.scale(adata, max_value=10)
 
-def cluster(adata, plot=False) :
+
+def cluster(adata, plot=False):
     """
     This method is a collection of steps: perform PCA, compute neighborhood graph, embed the neighborhood graph
     via UMAP, and clustering the neighborbood graph using the leiden algorithm. The passed adata will hve a bunch
@@ -219,10 +233,10 @@ def cluster(adata, plot=False) :
     :param plot true to plot the final umap.
     :return: None
     """
-    sc.tl.pca(adata) # tl: tools
+    sc.tl.pca(adata)  # tl: tools
     # The default parameters are used.
     # TODO: Need to expose the parameters used in the function definition.
-    sc.pp.neighbors(adata) # pp: preprocess
+    sc.pp.neighbors(adata)  # pp: preprocess
     # clustering using the Leiden algorithm. The clustering should be run first before the following paga
     # related statements
     sc.tl.leiden(adata, random_state=random_state)
@@ -231,7 +245,7 @@ def cluster(adata, plot=False) :
     # All default paramters are used here.
     sc.tl.paga(adata)
     # For some reason, each run may produce a little bit different layout
-    sc.pl.paga(adata, plot=False, random_state = random_state) # No need to plot. pl: plot
+    sc.pl.paga(adata, plot=False, random_state=random_state)  # No need to plot. pl: plot
     # Do umap
     sc.tl.umap(adata, init_pos='paga', random_state=random_state)
     adata.uns['paga']['pos'] = reset_paga_pos(adata)
@@ -246,11 +260,12 @@ def cluster(adata, plot=False) :
         sc.pl.umap(adata, color=['leiden'])
     # There is no need to return adata
 
+
 def rank_genes_groups(adata,
-                      groupby = 'leiden',
-                      groups = 'all',
-                      reference = 'rest',
-                      method = 't-test_overestim_var') :
+                      groupby='leiden',
+                      groups='all',
+                      reference='rest',
+                      method='t-test_overestim_var'):
     """
     Conduct a differential expression analysis for a group of genes.
     :param adata:
@@ -262,21 +277,21 @@ def rank_genes_groups(adata,
     """
     # We want to get all genes
     total_genes = None
-    if adata.raw is not None :
+    if adata.raw is not None:
         total_genes = adata.raw.n_vars
-    else :
+    else:
         total_genes = adata.n_vars
     # Make sure groups is a list
-    if groups is not 'all' and isinstance(groups, str) :
+    if groups is not 'all' and isinstance(groups, str):
         groups = [groups]
     sc.tl.rank_genes_groups(adata,
-                            groupby = groupby,
-                            use_raw = True,
-                            groups = groups,
-                            reference = reference,
-                            rankby_abs = True,
-                            method = method,
-                            n_genes = total_genes) # Get all genes
+                            groupby=groupby,
+                            use_raw=True,
+                            groups=groups,
+                            reference=reference,
+                            rankby_abs=True,
+                            method=method,
+                            n_genes=total_genes)  # Get all genes
 
 
 def reset_paga_pos(adata) -> ndarray:
@@ -291,7 +306,7 @@ def reset_paga_pos(adata) -> ndarray:
     umap_key = "X_umap"
     clusters = adata.obs[key].cat.categories
     cluster_pos = np.zeros((len(clusters), 2))
-    for icluster, cluster in enumerate(clusters) :
+    for icluster, cluster in enumerate(clusters):
         selected = adata.obs[key] == cluster
         selected_umap = adata.obsm[umap_key][selected, :]
         x_pos, y_pos = np.median(selected_umap, axis=0)
@@ -300,28 +315,29 @@ def reset_paga_pos(adata) -> ndarray:
 
 
 def dpt(adata: AnnData,
-        root_cell : str) :
+        root_cell: str):
     """
     Perform dpt analysis with the provided root_cell as the root.
     :param adata: pre-processed data
     :param root_cell:
     :return:
     """
-    if root_cell not in adata.obs_names :
+    if root_cell not in adata.obs_names:
         raise ValueError(root_cell + " is not in the obs_names.")
     # Get the number index of the root_cell
     root_index = np.flatnonzero(adata.obs_names == root_cell)[0]
     adata.uns['iroot'] = root_index
     sc.tl.dpt(adata)
-    if 'dpt_pseudotime' not in adata.obs.keys() :
+    if 'dpt_pseudotime' not in adata.obs.keys():
         raise ValueError("Cannot find dpt_pseudotime in the adata's keys.")
     return adata.obs['dpt_pseudotime']
+
 
 def project(new_dir_name: str,
             adata_ref: AnnData,
             scv: bool = False,
             batch_categories: Optional[str] = None,
-)->AnnData:
+            ) -> AnnData:
     """
     This function is used to project adata to adata_ref using ingest function in scanpy. The procedures here are based
     on the tutorial: integration-data-using-inject. Both adata ad adata_ref should have been preprocessed by running the
@@ -333,44 +349,45 @@ def project(new_dir_name: str,
     :return: return a merged AnnData object with two originally data copied and merged.
     """
     # Check if leiden has been conducted.
-    if 'leiden' not in adata_ref.obs :
+    if 'leiden' not in adata_ref.obs:
         return "error: run cluster first for the reference data."
     adata = None
-    if scv :
+    if scv:
         adata = scv_open(new_dir_name)
         scv_preprocess(adata)
-    else :
+    else:
         adata = open_10_genomics_data(new_dir_name)
         # Make sure we do the same thing as in the original data. But we don't want to keep the original data
         adata = preprocess(adata, copy=False, need_scale=False)
         # Check if we need to do permutation
-        if imputation_uns_key_name in adata_ref.uns_keys() :
+        if imputation_uns_key_name in adata_ref.uns_keys():
             # support magic only
-            sc.external.pp.magic(adata, solver = adata_ref.uns[imputation_uns_key_name]['solver'])
-            if 'min_value' in adata_ref.uns[imputation_uns_key_name].keys() :
-                adata.X -= adata_ref.uns[imputation_uns_key_name]['min_value'] # Scale up as in the orginal data
+            sc.external.pp.magic(adata, solver=adata_ref.uns[imputation_uns_key_name]['solver'])
+            if 'min_value' in adata_ref.uns[imputation_uns_key_name].keys():
+                adata.X -= adata_ref.uns[imputation_uns_key_name]['min_value']  # Scale up as in the orginal data
     # Make sure both of them have the same set of variables
     shared_var_names = adata_ref.var_names.intersection(adata.var_names)
     sc.logging.info("shared_var_names: {}".format(len(shared_var_names)))
     # slicing the data to make copies
     adata = adata[:, shared_var_names]
-    if not scv :
+    if not scv:
         # Call regress here so that we have almost the same number of genes selected by the adata_ref (aka highly invariable genes)
         regressout_key = None
-        if regressout_uns_key_name in adata.uns_keys() :
+        if regressout_uns_key_name in adata.uns_keys():
             regressout_key = adata.uns[regressout_uns_key_name]
             sc.logging.info("Find regressout_keys for projecting: ", str(regressout_key))
-        regress(adata, keys = regressout_key)
+        regress(adata, keys=regressout_key)
     adata_ref = adata_ref[:, shared_var_names]
     # inject based on the leiden
-    sc.tl.ingest(adata, adata_ref, obs = 'leiden')
+    sc.tl.ingest(adata, adata_ref, obs='leiden')
     # merge two objects
-    if not batch_categories :
+    if not batch_categories:
         batch_categories = ['ref', 'new']
-    adata_merged = adata_ref.concatenate(adata, batch_categories = batch_categories)
+    adata_merged = adata_ref.concatenate(adata, batch_categories=batch_categories)
     return adata_merged
 
-def cytotrace(adata: AnnData) -> list :
+
+def cytotrace(adata: AnnData) -> list:
     """
     This is a port of the original R implementation of Cytotrace by taking advantage of the existing connectivities
     and preprocessed data.
@@ -380,16 +397,16 @@ def cytotrace(adata: AnnData) -> list :
     # Make sure we have all data pre-calcualte
     sc.logging.info("Running cytotrace...")
     gene_count_key = 'n_genes_by_counts'
-    if gene_count_key not in adata.obs.keys() :
+    if gene_count_key not in adata.obs.keys():
         raise ValueError(gene_count_key + " is not in the obs names. Run preprocess first.")
     connectivities_key = 'connectivities'
-    if connectivities_key not in adata.obsp.keys() :
+    if connectivities_key not in adata.obsp.keys():
         raise ValueError(connectivities_key + " is not in the obsp. Run preprocess first.")
     # Calculate the Pearson correlation
     sc.logging.info("Calculating Pearson correlations between gene counts and expressions...")
     gene_count_exp_pc = list()
     # Use raw for correlations
-    for gene in adata.var_names :
+    for gene in adata.var_names:
         pc = stats.pearsonr(adata.raw.obs_vector(gene), adata.obs[gene_count_key])[0]
         gene_count_exp_pc.append(pc)
     # sort to pick up the first 200 genes having the largest positive correlation
@@ -403,7 +420,7 @@ def cytotrace(adata: AnnData) -> list :
     # Get the mean
     sc.logging.info("Calculating cell means for chosen genes...")
     cell_means = list()
-    for cell in adata.obs_names :
+    for cell in adata.obs_names:
         # cell_mean = np.mean(top_200_adata.var_vector(cell))
         # To calculate geom mean
         cell_vector = top_200_adata.var_vector(cell)
@@ -425,14 +442,14 @@ def cytotrace(adata: AnnData) -> list :
     # regressed_scores = adata.obs[gene_count_key]
     page_ranks = run_pagerank(adata=adata,
                               connectivities_key=None,
-                              m_matrix = m_matrix,
+                              m_matrix=m_matrix,
                               scores=regressed_scores)
     # page_ranks is a dict. Scale the value from 0 to 1
     page_ranks_min = min(page_ranks.values())
     page_ranks_max = max(page_ranks.values())
     scale = page_ranks_max - page_ranks_min
     cytotrace = [None] * len(page_ranks)
-    for key in page_ranks.keys() :
+    for key in page_ranks.keys():
         value = page_ranks[key]
         cytotrace[key] = (value - page_ranks_min) / scale
     # Save to the adata as observation
@@ -440,8 +457,9 @@ def cytotrace(adata: AnnData) -> list :
     sc.logging.info("Done cytotrace.")
     return cytotrace
 
-def infer_cell_root(adata : AnnData,
-                    candidate_clusters = None) :
+
+def infer_cell_root(adata: AnnData,
+                    candidate_clusters=None):
     """
     This function is used to infer a possible cell root for dpt. The algorithm works like this:
     1). Conduct a page rank analysis use n_genes_by_counts as the personalization scores and the graph base
@@ -458,20 +476,20 @@ def infer_cell_root(adata : AnnData,
     """
     sc.logging.info("Running infer_cell_root...")
     gene_count_key = 'n_genes_by_counts'
-    if gene_count_key not in adata.obs.keys() :
+    if gene_count_key not in adata.obs.keys():
         raise ValueError(gene_count_key + " is not in the obs names. Run preprocess first.")
     connectivities_key = 'connectivities'
-    if connectivities_key not in adata.obsp.keys() :
+    if connectivities_key not in adata.obsp.keys():
         raise ValueError(connectivities_key + " is not in the obsp. Run preprocess first.")
     leiden_key = 'leiden'
-    if leiden_key not in adata.obs.keys() :
+    if leiden_key not in adata.obs.keys():
         raise ValueError(leiden_key + " is not in the obs names. Run cluster first.")
-    run_pagerank(adata = adata,
-                 connectivities_key = connectivities_key,
+    run_pagerank(adata=adata,
+                 connectivities_key=connectivities_key,
                  m_matrix=None,
                  scores=adata.obs[gene_count_key])
     # Get cells
-    if candidate_clusters is None :
+    if candidate_clusters is None:
         candidate_clusters = choose_clusters_for_cell_root(adata)
     which_cells = adata.obs_vector('leiden').isin(candidate_clusters)
     selected_cells = adata.obs.index[which_cells]
@@ -480,14 +498,15 @@ def infer_cell_root(adata : AnnData,
     selected_cell_index = selected_cells[top_index]
     return (selected_cell_index, selected_page_rank[top_index])
 
-def choose_clusters_for_cell_root(adata: AnnData) :
+
+def choose_clusters_for_cell_root(adata: AnnData):
     sc.logging.info("Choosing clusters for cell root...")
     # all clusters
     clusters = adata.obs_vector('leiden').unique()
     clusters_pagerank_medians = pd.Series()
     page_ranks = adata.obs_vector('page_rank')
     leidens = adata.obs_vector('leiden')
-    for cluster in clusters :
+    for cluster in clusters:
         which_cells = leidens.isin([cluster])
         selected_page_rank = page_ranks[which_cells]
         clusters_pagerank_medians[cluster] = np.median(selected_page_rank)
@@ -499,20 +518,20 @@ def choose_clusters_for_cell_root(adata: AnnData) :
     first_clusters.append(clusters_pagerank_medians.index[0])
     current_next = 1
     second_clusters.append(clusters_pagerank_medians.index[current_next])
-    while True :
+    while True:
         which_cells = leidens.isin(first_clusters)
         first_clusters_pageranks = page_ranks[which_cells]
         which_cells = leidens.isin(second_clusters)
         second_cluster_pageranks = page_ranks[which_cells]
         # Mann–Whitney U test is used to avoid the complexity requirement by t-test
         t_test_result = stats.mannwhitneyu(first_clusters_pageranks, second_cluster_pageranks)
-        if t_test_result.pvalue < 0.05 : # The default p-value cutoff
+        if t_test_result.pvalue < 0.05:  # The default p-value cutoff
             break
         # Merge second_clusters to first_clsutets
         first_clusters.extend(second_clusters)
         current_next += current_next
         # No more. We are done here by collecting all cells
-        if current_next == len(clusters_pagerank_medians) :
+        if current_next == len(clusters_pagerank_medians):
             break
         second_clusters.clear()
         second_clusters.append(clusters_pagerank_medians.index[current_next])
@@ -523,18 +542,18 @@ def choose_clusters_for_cell_root(adata: AnnData) :
 def run_pagerank(adata: AnnData,
                  connectivities_key,
                  m_matrix,
-                 scores = None) :
+                 scores=None):
     page_rank_key = 'page_rank'
-    if page_rank_key in adata.obs.keys() :
+    if page_rank_key in adata.obs.keys():
         page_rank = adata.obs_vector('page_rank')
         return dict(zip(np.arange(0, len(page_rank)), page_rank))
     # We will use personalized pagerank for network smooth, which is the same in the original R implementation
     cell_graph = None
-    if m_matrix is not None :
+    if m_matrix is not None:
         cell_graph = nx.Graph(m_matrix)
-    else :
+    else:
         cell_graph = nx.Graph(adata.obsp[connectivities_key])
-    if scores is None :
+    if scores is None:
         scores = adata.obs_vector('n_genes_by_counts')
     cell_scores = dict(zip(np.arange(0, len(scores)), scores))
     # Cannot work with pargerank_scipy. So use this method.
@@ -543,6 +562,7 @@ def run_pagerank(adata: AnnData,
     # values are sorted based on nodes' indices from 0 to total_cells. So we can use it directly.
     adata.obs['page_rank'] = page_ranks.values()
     return page_ranks
+
 
 # The following is test code and should be removed
 dir_17_5 = "/Users/wug/Documents/missy_single_cell/seq_data_v2/17_5_gfp/filtered_feature_bc_matrix"

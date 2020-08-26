@@ -1,8 +1,11 @@
 # The following R script is copied from the tutorial.ipynb hosted at https://github.com/theislab/dca/blob/master/tutorial.ipynb.
 # This R script is used to generate some artificial file for software development.
-setwd("/Users/wug/git/reactome-fi/fi_sc_analysis/RSrc") 
+
+setwd("/Users/wug/git/reactome-fi/fi_sc_analysis/RSrc") # replace with getwd() or path param
+
 # make sure that splatter is installed: https://github.com/Oshlack/splatter
 library(splatter)
+# --------------------------------------------------------
 
 simulate <- function(nGroups=2, nGenes=200, batchCells=2000, dropout=3)
 {
