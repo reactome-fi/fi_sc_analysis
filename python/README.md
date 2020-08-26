@@ -2,5 +2,5 @@
 
 - PyPI install using pip 
     ``` 
-    (sudo) pip install "scpy4reactome" 
+    (sudo) pip install scpy4reactome 
     ```
