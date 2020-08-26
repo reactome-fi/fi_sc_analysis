@@ -6,8 +6,7 @@ with open("README.md", "r") as f:
     long_description = f.read()
 
 setup(
-    # replace name of package (dir) to be what is desired for pip install "name" ex. reactomeSC (PEP8 naming convention)
-    name='PySrc',
+    name='scpy4reactome',
     version=__version__,
     description='python service for single cell analysis in Reactome',
     long_description=long_description,

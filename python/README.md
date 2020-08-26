@@ -2,5 +2,5 @@
 
 - PyPI install using pip 
     ``` 
-    (sudo) pip install "TBD" 
+    (sudo) pip install "scpy4reactome" 
     ```

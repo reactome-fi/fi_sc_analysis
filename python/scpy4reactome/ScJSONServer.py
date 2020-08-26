@@ -1,6 +1,6 @@
 from jsonrpclib.SimpleJSONRPCServer import SimpleJSONRPCServer
 import logging as logger
-import ScanpyWrapper as analyzer
+from . import ScanpyWrapper as analyzer
 import scvelo as scv
 import scanpy as sc
 
