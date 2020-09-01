@@ -3,61 +3,54 @@ import logging as logger
 from . import ScanpyWrapper as analyzer
 import scvelo as scv
 import scanpy as sc
-
+import GeneRelEval as rel
 
 def echo(text):
     return "You sent: " + text
 
-
-def scv_open(file_name):
+def scv_open(file_name) :
     adata = analyzer.scv_open(file_name)
     analyzer.cache_data(adata)
     return str(adata)
 
-
-def scv_preprocess():
+def scv_preprocess() :
     adata = analyzer.get_loaded_data()
     analyzer.scv_preprocess(adata)
     # This is the same as the loaded data for scv
     analyzer.cache_processed_data(adata)
     return str(adata)
 
-
-def scv_velocity(mode):
+def scv_velocity(mode) :
     adata = analyzer.get_processed_data()
-    analyzer.scv_velocity(adata, mode=mode)
+    analyzer.scv_velocity(adata, mode = mode)
     return str(adata)
 
-
-def scv_velocity_plot(gene: str):
+def scv_velocity_plot(gene:str) :
     adata = analyzer.get_processed_data()
     if gene not in adata.var_names:
         return "error: " + gene + " cannot be found."
     file_name = gene + '_velocity.pdf'
-    scv.pl.velocity(adata, gene, color='leiden', show=False, save=file_name)
+    scv.pl.velocity(adata, gene, color='leiden', show = False, save = file_name)
     return "scvelo_" + file_name
 
-
-def scv_rank_velocity_genes():
+def scv_rank_velocity_genes() :
     adata = analyzer.get_processed_data()
     scv.tl.rank_velocity_genes(adata, groupby='leiden', n_genes=analyzer.n_rank_genes)
     return adata.uns['rank_velocity_genes']['names'].tolist()
 
-
-def scv_rank_dynamic_genes():
+def scv_rank_dynamic_genes() :
     adata = analyzer.get_processed_data()
     # Have to make sure dynamic mode is used for RNA velocity analysis
-    if adata.uns['velocity_params']['mode'] != 'dynamical':
+    if adata.uns['velocity_params']['mode'] != 'dynamical' :
         return "Error: The dynamical mode for RNA velocity analysis must be used to rank dynamic genes."
     scv.tl.rank_dynamical_genes(adata, groupby='leiden', n_genes=analyzer.n_rank_genes)
     return adata.uns['rank_dynamical_genes']['names'].tolist()
 
-
-def scv_embedding(color_key=None):
+def scv_embedding(color_key=None) :
     adata = analyzer.get_processed_data()
-    if color_key is None:
+    if color_key is None :
         color_key = 'leiden'
-    elif color_key not in adata.var_names:
+    elif color_key not in adata.var_names :
         return "error: " + color_key + " cannot be found."
     file_name = color_key + '_umap_embedding.pdf'
     # Just dump the plot to a file and let the client do whatever it needs
@@ -67,12 +60,11 @@ def scv_embedding(color_key=None):
     # For some unknown reason, the actual file name having scvelo prefixed
     return "scvelo_" + file_name
 
-
-def scv_embedding_grid(color_key=None):
+def scv_embedding_grid(color_key=None) :
     adata = analyzer.get_processed_data()
-    if color_key is None:
+    if color_key is None :
         color_key = 'leiden'
-    elif color_key not in adata.var_names:
+    elif color_key not in adata.var_names :
         return "error: " + color_key + " cannot be found."
     file_name = color_key + '_umap_embedding_grid.pdf'
     # Just dump the plot to a file and let the client do whatever it needs
@@ -82,12 +74,11 @@ def scv_embedding_grid(color_key=None):
     # For some unknown reason, the actual file name having scvelo prefixed
     return "scvelo_" + file_name
 
-
-def scv_embedding_stream(color_key=None):
+def scv_embedding_stream(color_key=None) :
     adata = analyzer.get_processed_data()
-    if color_key is None:
+    if color_key is None :
         color_key = 'leiden'
-    elif color_key not in adata.var_names:
+    elif color_key not in adata.var_names :
         return "error: " + color_key + " cannot be found."
     file_name = color_key + '_umap_embedding_stream.png'
     # Just dump the plot to a file and let the client do whatever it needs
@@ -97,15 +88,13 @@ def scv_embedding_stream(color_key=None):
     # For some unknown reason, the actual file name having scvelo prefixed
     return "scvelo_" + file_name
 
-
 def open_data(dir_name):
     adata = analyzer.open_10_genomics_data(dir_name)
     analyzer.cache_data(adata)
     # Just return a string for the client
     return str(adata)
 
-
-def open_analyzed_data(file_name: str) -> str:
+def open_analyzed_data(file_name:str) -> str:
     """
     Open a processed adata writted by function write_data below.
     :param file_name:
@@ -115,8 +104,7 @@ def open_analyzed_data(file_name: str) -> str:
     analyzer.cache_processed_data(adata)
     return str(adata)
 
-
-def write_data(file_name: str) -> str:
+def write_data(file_name:str) -> str:
     """
     Write the loaded data into a file in the h5ad format
     :param file_name:
@@ -126,11 +114,11 @@ def write_data(file_name: str) -> str:
     if adata is None:
         return "error: no data loaded for writing."
     adata.write(file_name, compression='gzip')
-    return str(adata)  # for debug purpose
+    return str(adata) # for debug purpose
 
 
 def project(dir_name,
-            scv=False):
+            scv = False):
     adata = analyzer.get_processed_data()
     if adata is None:
         return "error: no pre-processed reference data is available."
@@ -144,7 +132,6 @@ def project(dir_name,
     for cell, umap, leiden in zipped:
         rtn[cell] = (umap[0], umap[1], leiden)
     return rtn
-
 
 def preprocess_data(regress_out_keys=None,
                     imputation: str = 'magic'):
@@ -160,10 +147,10 @@ def preprocess_data(regress_out_keys=None,
             regress_out_keys = None
         else:
             regress_out_keys = str.split(regress_out_keys, ",")
-    if imputation is not None:
-        if len(imputation) == 0:
+    if imputation is not None :
+        if len(imputation) == 0 :
             imputation = None
-        elif imputation != 'magic':
+        elif imputation != 'magic' :
             return "error: The supported imputation method is 'magic' only!"
     print("imputation: ", imputation)
     print("regress_out_keys: ", regress_out_keys)
@@ -209,7 +196,6 @@ def get_connectivites():
     for edge in network.edges:
         rtn.append((str(edge[0]), str(edge[1]), str(network[edge[0]][edge[1]]['weight'])))
     return rtn
-
 
 def cytotrace():
     adata = analyzer.get_processed_data()
@@ -297,12 +283,11 @@ def get_paga():
     # Since this is a graph for clusters and the adjacency matrix is not that sparse,
     # using this should be fine. This should be a list of list of double for a n x n
     # matrix (n is the number of clusters)
-    edge_key = 'transitions_confidence'  # Directed cluster adjacency matrix from velocity analysis
-    if edge_key not in adata.uns['paga'].keys():
-        edge_key = 'connectivities'  # undirected cluster adjacency matrix: symmetric
+    edge_key = 'transitions_confidence' # Directed cluster adjacency matrix from velocity analysis
+    if edge_key not in adata.uns['paga'].keys() :
+        edge_key = 'connectivities' # undirected cluster adjacency matrix: symmetric
     rtn['connectivities'] = adata.uns[key][edge_key].toarray().tolist()
     return rtn
-
 
 def dpt(root_cell: str):
     adata = analyzer.get_processed_data()
@@ -352,6 +337,54 @@ def infer_cell_root(*args):
         target_clusters = args
     return analyzer.infer_cell_root(adata, target_clusters)
 
+def get_cell_time_keys() -> str :
+    adata = analyzer.get_processed_data()
+    # Get the keys for gene relationships calcuations
+    rtn = ['latent_time', 'velocity_pseudotime', 'cytotrace', 'dpt_pseudotime']
+    return [i for i in rtn if i in adata.obs_keys()]
+
+def calculate_gene_relations(gene_pairs:str,
+                             groups:str,
+                             cell_time_key:str,
+                             layer:str = None,
+                             delay_window = None,
+                             mode = 'spearman') -> dict:
+    """
+    Calculate gene-gene relations for a list of passed gene pairs.
+    :param gene_pairs: list of gene pairs with two genes tab-delimited. The two genes are directed.
+    :param groups: calculations should be conducted based on cells in the specific groups.
+    :param cell_time_key: one of latent_time, velocity_pseudotime, cytotrace, and dpt_pseudotime.
+    The first two values are generated for RNA-velocity data analysis.
+    :param layer:
+    :param delay_window:
+    :param mode:
+    :return:
+    """
+    adata = analyzer.get_processed_data()
+    if cell_time_key not in adata.obs_keys() :
+        return "error: " + cell_time_key + " is not in the observation keys."
+    # A specific key for caller
+    if layer is not None and layer == 'null' :
+        layer = None
+    if layer is not None and layer not in adata.layers :
+        return "error: " + layer + " is not in the dataset."
+    adata_slice = None
+    if groups is None or groups == 'all' :
+        adata_slice = adata
+    else :
+        groups = [i for i in groups.split(',')]
+        selected = adata.obs_vector('leiden').isin(groups)
+        adata_slice = adata[selected, :]
+    if delay_window is not None :
+        delay_window = int(delay_window) # Force the string to an int
+    # Want to focus on the passed clusters
+    gene_pairs = [i for i in gene_pairs.split('\n')]
+    return rel.calculate_gene_relations(gene_pairs,
+                                        adata_slice,
+                                        cell_time_key,
+                                        layer,
+                                        delay_window,
+                                        mode)
 
 def main():
     # server = SimpleJSONRPCServer(('localhost', 8085))
@@ -382,6 +415,8 @@ def main():
     server.register_function(scv_velocity_plot)
     server.register_function(scv_rank_velocity_genes)
     server.register_function(scv_rank_dynamic_genes)
+    server.register_function(calculate_gene_relations)
+    server.register_function(get_cell_time_keys)
     server.register_function(echo)
     server.register_function(stop)
     logger.info("Start server...")
