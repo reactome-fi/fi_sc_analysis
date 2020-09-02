@@ -3,7 +3,7 @@ import logging as logger
 from . import ScanpyWrapper as analyzer
 import scvelo as scv
 import scanpy as sc
-import GeneRelEval as rel
+from . import GeneRelEval as rel
 
 def echo(text):
     return "You sent: " + text
@@ -461,5 +461,9 @@ logger.info("Server initialized at ", server.server_address)
 # Server address is a tupe. The first element is the host and the second is the port number
 isWaiting = True
 
-if __name__ == '__main__':
-    main()
+main()
+
+# To make shiv, which is used to build a distributable python application having all packages bundled toghter, don't enable the following main method.
+# But the above main() should be called. For development purpose, these two lines have been moved into ../main.py.
+#if __name__ == '__main__':
+#    main()

@@ -6,7 +6,8 @@ from anndata import AnnData
 import numpy
 from numpy import ndarray
 from scipy import stats
-from Scribe import information_estimators as iet
+# Turn of MI-based relationship calculation from Scribe because of the performance reason.
+#from Scribe import information_estimators as iet
 import math # check float isNaN
 
 DEBUG = False
@@ -113,10 +114,10 @@ def _calculate_mi(value1:ndarray,
         # The following code is based on Scribe.causal_network
         x = x_ori[:-delay]
         y = y_ori[delay:]
-        temp = iet.mi(x, y)
-        print(temp)
-        if temp > mi:
-            mi = temp
+        #temp = iet.mi(x, y)
+        #print(temp)
+        #if temp > mi:
+        #    mi = temp
     return mi
 
 def _calculate_rdi(value1:ndarray,
@@ -131,9 +132,9 @@ def _calculate_rdi(value1:ndarray,
         x = x_ori[:-delay]
         y_minux_1 = y_ori[delay-1:-1]
         y = y_ori[delay:]
-        temp = iet.cmi(x, y, y_minux_1)
-        if temp > rdi :
-            rdi = temp
+        #temp = iet.cmi(x, y, y_minux_1)
+        #if temp > rdi :
+        #    rdi = temp
     return rdi
 
 # For test

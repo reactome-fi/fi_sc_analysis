@@ -145,3 +145,4 @@ cython_debug/
 # Pyre type checker
 
 .DS_Store
+/scpy4reactome.pyz
