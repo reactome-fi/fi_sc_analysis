@@ -4,6 +4,7 @@ from . import ScanpyWrapper as analyzer
 import scvelo as scv
 import scanpy as sc
 from . import GeneRelEval as rel
+import sys
 
 def echo(text):
     return "You sent: " + text
@@ -454,16 +455,14 @@ def stop():
 logger.basicConfig()
 # Define two global level variables so that we can control the server's behaviors
 # Use 0 if we dont need to specify the port number
-# TODO: Make sure this be configured or automatically assigned
+# Get get the port from sys params
 port = 8999
+if len(sys.argv) > 1 :
+    port = int(sys.argv[1]) # cast to int
+logger.info("Port: ", port)
 server = SimpleJSONRPCServer(('localhost', port))
 logger.info("Server initialized at ", server.server_address)
 # Server address is a tupe. The first element is the host and the second is the port number
 isWaiting = True
-
+# Start the server
 main()
-
-# To make shiv, which is used to build a distributable python application having all packages bundled toghter, don't enable the following main method.
-# But the above main() should be called. For development purpose, these two lines have been moved into ../main.py.
-#if __name__ == '__main__':
-#    main()

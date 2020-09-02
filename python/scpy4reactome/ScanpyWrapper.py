@@ -132,7 +132,7 @@ def open_10_genomics_data(dir) :
     adata.var_names_make_unique()
     return adata
 
-def filter(adata, min_genes = 200, min_cells = 3, copy = False) :
+def _filter(adata, min_genes = 200, min_cells = 3, copy = False) :
     """
         Perform a simple filtering by remove cells having less than min_genes and genes having less than
         min_cells.
@@ -157,7 +157,7 @@ def preprocess(adata, copy=False, need_scale=True, regressout_keys = None, imput
         raise ValueError("error: imputation method '{}' is not supported.".format(imputation))
     if (copy) :
         adata=adata.copy()
-    filter(adata, copy=False) # Regardless we should not copy it
+    _filter(adata, copy=False) # Regardless we should not copy it
     # Check mitochondrial genes to make sure they don't interfere our analysis
     # To support both human and mouse genes
     adata.var['mt'] = adata.var_names.str.startswith('MT-') | adata.var_names.str.startswith('mt-')
