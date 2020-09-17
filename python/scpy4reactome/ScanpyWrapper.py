@@ -25,8 +25,12 @@ import pandas as pd
 import scvelo as scv
 
 # As suggested in the tutorial by scanpy doc: Preprocessing and clustering 3k PBMCs
-sc.settings.verbosity = 3
-sc.logging.print_versions()
+# 3 for info and hints
+#sc.settings.verbosity = 3
+# Versions for all modules used by scanpy
+#sc.logging.print_versions()
+# scanpy version only
+#sc.logging.print_version_and_date()
 # To use scvelo's setting below
 #sc.set_figure_params(dpi = 80, facecolor = 'white')
 
@@ -41,7 +45,6 @@ regressout_uns_key_name = 'regressout_keys'
 imputation_uns_key_name = 'imputation'
 # 250 is a good number for pathway and network analysis. So far hard-code it.
 n_rank_genes = 250
-
 # Global level flags to control the use of the serve
 # server = SimpleJSONRPCServer("localhost")
 # isWaiting = True
@@ -124,11 +127,20 @@ def scv_velocity(adata,
     sc.tl.umap(adata, init_pos='paga', random_state=random_state) # We don't have positions for paga yet
     adata.uns['paga']['pos'] = _reset_paga_pos(adata)
 
-def open_10_genomics_data(dir) :
+def open_10_genomics_data(dir,
+                          method = 'read_10x_mtf') :
     """
         Open a 10x genomics data into an annadata object.
     """
-    adata = sc.read_10x_mtx(dir, var_names='gene_symbols', cache=True)
+    adata = None
+    if method == 'read_10x_mtx' :
+        adata = sc.read_10x_mtx(dir, var_names='gene_symbols', cache=True)
+    elif method == 'read_h5ad' :
+        adata = sc.read_h5ad(dir)
+    elif method == 'read_visium' :
+        adata = sc.read_visium(dir)
+    else:
+        raise ValueError('{} is not supported yet.'.format(method))
     adata.var_names_make_unique()
     return adata
 
@@ -359,7 +371,7 @@ def project(new_dir_name: str,
         regressout_key = None
         if regressout_uns_key_name in adata.uns_keys() :
             regressout_key = adata.uns[regressout_uns_key_name]
-            sc.logging.info("Find regressout_keys for projecting: ", str(regressout_key))
+            sc.logging.info("Find regressout_keys for projecting: {}".format(regressout_key))
         regress(adata, keys = regressout_key)
     adata_ref = adata_ref[:, shared_var_names]
     # inject based on the leiden

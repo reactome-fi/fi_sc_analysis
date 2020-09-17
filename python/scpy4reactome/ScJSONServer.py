@@ -1,57 +1,72 @@
 from jsonrpclib.SimpleJSONRPCServer import SimpleJSONRPCServer
 import logging as logger
-from . import ScanpyWrapper as analyzer
+import sys
+import inspect
 import scvelo as scv
 import scanpy as sc
+from . import ScanpyWrapper as analyzer
 from . import GeneRelEval as rel
-import sys
 
 def echo(text):
     return "You sent: " + text
 
-def scv_open(file_name) :
+
+def scv_open(file_name):
+    logger.info('scv_open(file_name = {})...'.format(file_name))
     adata = analyzer.scv_open(file_name)
     analyzer.cache_data(adata)
     return str(adata)
 
-def scv_preprocess() :
+
+def scv_preprocess():
+    logger.info('{}...'.format(inspect.currentframe().f_code.co_name))
     adata = analyzer.get_loaded_data()
     analyzer.scv_preprocess(adata)
     # This is the same as the loaded data for scv
     analyzer.cache_processed_data(adata)
     return str(adata)
 
-def scv_velocity(mode) :
+
+def scv_velocity(mode):
+    logger.info('scv_velocity(mode = {})...'.format(mode))
     adata = analyzer.get_processed_data()
-    analyzer.scv_velocity(adata, mode = mode)
+    analyzer.scv_velocity(adata, mode=mode)
     return str(adata)
 
-def scv_velocity_plot(gene:str) :
+
+def scv_velocity_plot(gene: str):
+    logger.info('scv_velocity_plot(gene = [])...'.format(gene))
     adata = analyzer.get_processed_data()
     if gene not in adata.var_names:
         return "error: " + gene + " cannot be found."
     file_name = gene + '_velocity.pdf'
-    scv.pl.velocity(adata, gene, color='leiden', show = False, save = file_name)
+    scv.pl.velocity(adata, gene, color='leiden', show=False, save=file_name)
     return "scvelo_" + file_name
 
-def scv_rank_velocity_genes() :
+
+def scv_rank_velocity_genes():
+    logger.infologger.info('{}...'.format(inspect.currentframe().f_code.co_name))
     adata = analyzer.get_processed_data()
     scv.tl.rank_velocity_genes(adata, groupby='leiden', n_genes=analyzer.n_rank_genes)
     return adata.uns['rank_velocity_genes']['names'].tolist()
 
-def scv_rank_dynamic_genes() :
+
+def scv_rank_dynamic_genes():
+    logger.info('{}...'.format(inspect.currentframe().f_code.co_name))
     adata = analyzer.get_processed_data()
     # Have to make sure dynamic mode is used for RNA velocity analysis
-    if adata.uns['velocity_params']['mode'] != 'dynamical' :
+    if adata.uns['velocity_params']['mode'] != 'dynamical':
         return "Error: The dynamical mode for RNA velocity analysis must be used to rank dynamic genes."
     scv.tl.rank_dynamical_genes(adata, groupby='leiden', n_genes=analyzer.n_rank_genes)
     return adata.uns['rank_dynamical_genes']['names'].tolist()
 
-def scv_embedding(color_key=None) :
+
+def scv_embedding(color_key=None):
+    logger.info('{}...'.format(inspect.currentframe().f_code.co_name))
     adata = analyzer.get_processed_data()
-    if color_key is None :
+    if color_key is None:
         color_key = 'leiden'
-    elif color_key not in adata.var_names :
+    elif color_key not in adata.var_names:
         return "error: " + color_key + " cannot be found."
     file_name = color_key + '_umap_embedding.pdf'
     # Just dump the plot to a file and let the client do whatever it needs
@@ -61,11 +76,13 @@ def scv_embedding(color_key=None) :
     # For some unknown reason, the actual file name having scvelo prefixed
     return "scvelo_" + file_name
 
-def scv_embedding_grid(color_key=None) :
+
+def scv_embedding_grid(color_key=None):
+    logger.info('{}...'.format(inspect.currentframe().f_code.co_name))
     adata = analyzer.get_processed_data()
-    if color_key is None :
+    if color_key is None:
         color_key = 'leiden'
-    elif color_key not in adata.var_names :
+    elif color_key not in adata.var_names:
         return "error: " + color_key + " cannot be found."
     file_name = color_key + '_umap_embedding_grid.pdf'
     # Just dump the plot to a file and let the client do whatever it needs
@@ -75,11 +92,13 @@ def scv_embedding_grid(color_key=None) :
     # For some unknown reason, the actual file name having scvelo prefixed
     return "scvelo_" + file_name
 
-def scv_embedding_stream(color_key=None) :
+
+def scv_embedding_stream(color_key=None):
+    logger.info('{}...'.format(inspect.currentframe().f_code.co_name))
     adata = analyzer.get_processed_data()
-    if color_key is None :
+    if color_key is None:
         color_key = 'leiden'
-    elif color_key not in adata.var_names :
+    elif color_key not in adata.var_names:
         return "error: " + color_key + " cannot be found."
     file_name = color_key + '_umap_embedding_stream.png'
     # Just dump the plot to a file and let the client do whatever it needs
@@ -89,13 +108,18 @@ def scv_embedding_stream(color_key=None) :
     # For some unknown reason, the actual file name having scvelo prefixed
     return "scvelo_" + file_name
 
-def open_data(dir_name):
-    adata = analyzer.open_10_genomics_data(dir_name)
+
+def open_data(dir_name,
+              method : str):
+    logger.info('open_data(dir_name = {}, method = {})...'.format(dir_name, method))
+    adata = analyzer.open_10_genomics_data(dir_name, method)
     analyzer.cache_data(adata)
     # Just return a string for the client
     return str(adata)
 
-def open_analyzed_data(file_name:str) -> str:
+
+def open_analyzed_data(file_name: str) -> str:
+    logger.info('open_analyzed_data(file_name = {})...'.format(file_name))
     """
     Open a processed adata writted by function write_data below.
     :param file_name:
@@ -105,7 +129,9 @@ def open_analyzed_data(file_name:str) -> str:
     analyzer.cache_processed_data(adata)
     return str(adata)
 
-def write_data(file_name:str) -> str:
+
+def write_data(file_name: str) -> str:
+    logger.info("write_data(file_name = {})...".format(file_name))
     """
     Write the loaded data into a file in the h5ad format
     :param file_name:
@@ -115,14 +141,19 @@ def write_data(file_name:str) -> str:
     if adata is None:
         return "error: no data loaded for writing."
     adata.write(file_name, compression='gzip')
-    return str(adata) # for debug purpose
+    return str(adata)  # for debug purpose
 
 
 def project(dir_name,
-            scv = False):
+            scv=False):
+    logger.info('project(dir_name = {}, scv = {})...'.format(dir_name, scv))
     adata = analyzer.get_processed_data()
     if adata is None:
         return "error: no pre-processed reference data is available."
+    if scv is not None and scv == 'true':
+        scv = True
+    else:
+        scv = False
     merged_data = analyzer.project(dir_name, adata, scv)
     analyzer.cache_merged_data(merged_data)
     # Return the location of UMAP coordinates for new_data.
@@ -134,6 +165,7 @@ def project(dir_name,
         rtn[cell] = (umap[0], umap[1], leiden)
     return rtn
 
+
 def preprocess_data(regress_out_keys=None,
                     imputation: str = 'magic'):
     """
@@ -143,18 +175,17 @@ def preprocess_data(regress_out_keys=None,
     :return:
     """
     # Convert the gress_out_keys into a list
+    logger.info('preprocess_data(regress_out_keys = {}, imputation = {})...'.format(regress_out_keys, imputation))
     if regress_out_keys is not None:
         if len(regress_out_keys) == 0:
             regress_out_keys = None
         else:
             regress_out_keys = str.split(regress_out_keys, ",")
-    if imputation is not None :
-        if len(imputation) == 0 :
+    if imputation is not None:
+        if len(imputation) == 0:
             imputation = None
-        elif imputation != 'magic' :
+        elif imputation != 'magic':
             return "error: The supported imputation method is 'magic' only!"
-    print("imputation: ", imputation)
-    print("regress_out_keys: ", regress_out_keys)
     adata = analyzer.get_loaded_data()
     if adata is None:
         return "error: no data loaded. Call open_data first."
@@ -168,6 +199,7 @@ def preprocess_data(regress_out_keys=None,
 
 
 def cluster_data():
+    logger.info('{}...'.format(inspect.currentframe().f_code.co_name))
     # We should use pre-processed data for clustering analysis
     adata = analyzer.get_processed_data()
     if adata is None:
@@ -178,6 +210,7 @@ def cluster_data():
 
 
 def get_umap():
+    logger.info('{}...'.format(inspect.currentframe().f_code.co_name))
     adata = analyzer.get_processed_data()
     key = 'X_umap'
     if key not in adata.obsm.keys():
@@ -186,6 +219,7 @@ def get_umap():
 
 
 def get_connectivites():
+    logger.info('{}...'.format(inspect.currentframe().f_code.co_name))
     adata = analyzer.get_processed_data()
     key = 'connectivities'
     if key not in adata.obsp.keys():
@@ -198,7 +232,9 @@ def get_connectivites():
         rtn.append((str(edge[0]), str(edge[1]), str(network[edge[0]][edge[1]]['weight'])))
     return rtn
 
+
 def cytotrace():
+    logger.info('{}...'.format(inspect.currentframe().f_code.co_name))
     adata = analyzer.get_processed_data()
     key = "cytotrace"
     if key not in adata.obs.keys():
@@ -207,6 +243,7 @@ def cytotrace():
 
 
 def get_cluster():
+    logger.info('{}...'.format(inspect.currentframe().f_code.co_name))
     return get_obs('leiden')
 
 
@@ -216,6 +253,7 @@ def get_obs(obs_name: str):
     :param obs_name:
     :return:
     """
+    logger.info('get_obs(obs_name = {})...'.format(obs_name))
     adata = analyzer.get_processed_data()
     if adata is None:
         return "error: no preprocessed data. Call open_data and preproces_data first."
@@ -228,6 +266,7 @@ def get_obs_names():
     """"
     Get a list of obs_names.
     """
+    logger.info('{}...'.format(inspect.currentframe().f_code.co_name))
     adata = analyzer.get_processed_data()
     if adata is None:
         return "error: no preprocessed data. Call open_data and preproces_data first."
@@ -239,6 +278,7 @@ def get_obs_names():
 
 
 def get_cell_ids():
+    logger.info('{}...'.format(inspect.currentframe().f_code.co_name))
     # Have to use the processed data. Otherwise, cell ids may be too many
     adata = analyzer.get_processed_data()
     if adata is None:
@@ -249,6 +289,7 @@ def get_cell_ids():
 def rank_genes_groups(groups='all',
                       reference='rest',
                       groupby='leiden') -> dict:
+    logger.info('rank_genes_groups(groups = {}, reference = {}, groupby = {})...'.format(groups, reference, groupby))
     adata = analyzer.get_processed_data()
     if adata is None:
         return "error: no preprocessed data. Call open_data and preproces_data first."
@@ -273,6 +314,7 @@ def rank_genes_groups(groups='all',
 
 
 def get_paga():
+    logger.info('{}...'.format(inspect.currentframe().f_code.co_name))
     adata = analyzer.get_processed_data()
     key = 'paga'
     if key not in adata.uns.keys():
@@ -284,13 +326,15 @@ def get_paga():
     # Since this is a graph for clusters and the adjacency matrix is not that sparse,
     # using this should be fine. This should be a list of list of double for a n x n
     # matrix (n is the number of clusters)
-    edge_key = 'transitions_confidence' # Directed cluster adjacency matrix from velocity analysis
-    if edge_key not in adata.uns['paga'].keys() :
-        edge_key = 'connectivities' # undirected cluster adjacency matrix: symmetric
+    edge_key = 'transitions_confidence'  # Directed cluster adjacency matrix from velocity analysis
+    if edge_key not in adata.uns['paga'].keys():
+        edge_key = 'connectivities'  # undirected cluster adjacency matrix: symmetric
     rtn['connectivities'] = adata.uns[key][edge_key].toarray().tolist()
     return rtn
 
+
 def dpt(root_cell: str):
+    logger.info('dpt(root_cell = {})...'.format(root_cell))
     adata = analyzer.get_processed_data()
     if adata is None:
         return "error: no preprocessed data. Call open_data, preprocess first."
@@ -304,6 +348,7 @@ def get_gene_exp(gene: str):
     :param gene:
     :return:
     """
+    logger.info('get_gene_exp(gene = {})...'.format(gene))
     adata = analyzer.get_processed_data()
     if adata is None:
         adata = analyzer.get_loaded_data()
@@ -329,6 +374,7 @@ def get_gene_exp(gene: str):
 
 
 def infer_cell_root(*args):
+    logger.info('infer_cell_root({})...'.format(args))
     adata = analyzer.get_processed_data()
     if adata is None:
         return "error: no preprocessed data. Call open_data, preprocess first."
@@ -338,18 +384,21 @@ def infer_cell_root(*args):
         target_clusters = args
     return analyzer.infer_cell_root(adata, target_clusters)
 
-def get_cell_time_keys() -> str :
+
+def get_cell_time_keys() -> str:
+    logger.info('{}...'.format(inspect.currentframe().f_code.co_name))
     adata = analyzer.get_processed_data()
     # Get the keys for gene relationships calcuations
     rtn = ['latent_time', 'velocity_pseudotime', 'cytotrace', 'dpt_pseudotime']
     return [i for i in rtn if i in adata.obs_keys()]
 
-def calculate_gene_relations(gene_pairs:str,
-                             groups:str,
-                             cell_time_key:str,
-                             layer:str = None,
-                             delay_window = None,
-                             mode = 'spearman') -> dict:
+
+def calculate_gene_relations(gene_pairs: str,
+                             groups: str,
+                             cell_time_key: str,
+                             layer: str = None,
+                             delay_window=None,
+                             mode='spearman') -> dict:
     """
     Calculate gene-gene relations for a list of passed gene pairs.
     :param gene_pairs: list of gene pairs with two genes tab-delimited. The two genes are directed.
@@ -361,23 +410,26 @@ def calculate_gene_relations(gene_pairs:str,
     :param mode:
     :return:
     """
+    logger.info('calculate_gene_regulations(groups = {}, cell_time_key = {}, '
+                'layer = {}, delay_window = {}, '
+                'mode = {})...'.format(groups, cell_time_key, layer, delay_window, mode))
     adata = analyzer.get_processed_data()
-    if cell_time_key not in adata.obs_keys() :
+    if cell_time_key not in adata.obs_keys():
         return "error: " + cell_time_key + " is not in the observation keys."
     # A specific key for caller
-    if layer is not None and layer == 'null' :
+    if layer is not None and layer == 'null':
         layer = None
-    if layer is not None and layer not in adata.layers :
+    if layer is not None and layer not in adata.layers:
         return "error: " + layer + " is not in the dataset."
     adata_slice = None
-    if groups is None or groups == 'all' :
+    if groups is None or groups == 'all':
         adata_slice = adata
-    else :
+    else:
         groups = [i for i in groups.split(',')]
         selected = adata.obs_vector('leiden').isin(groups)
         adata_slice = adata[selected, :]
-    if delay_window is not None :
-        delay_window = int(delay_window) # Force the string to an int
+    if delay_window is not None:
+        delay_window = int(delay_window)  # Force the string to an int
     # Want to focus on the passed clusters
     gene_pairs = [i for i in gene_pairs.split('\n')]
     return rel.calculate_gene_relations(gene_pairs,
@@ -386,6 +438,7 @@ def calculate_gene_relations(gene_pairs:str,
                                         layer,
                                         delay_window,
                                         mode)
+
 
 def main():
     # server = SimpleJSONRPCServer(('localhost', 8085))
@@ -428,7 +481,7 @@ def main():
 def start():
     while (isWaiting):
         server.handle_request()
-        logger.info("isWaiting", isWaiting)
+        # logger.debug("isWaiting: {}".format(isWaiting))
     server.server_close()  # Don't use shutdown(). It will block the call.
     logger.info("Server stopped.")
 
@@ -451,18 +504,35 @@ def stop():
     isWaiting = False
 
 
+# Set up logging
+logging_file_name = None
+if len(sys.argv) > 2:
+    logging_file_name = sys.argv[2]
 # Enable basic logging for the time being
-logger.basicConfig()
+logger.basicConfig(format='%(asctime)s %(message)s',
+                   datefmt='%m/%d/%Y %I:%M:%S %p',
+                   filename=logging_file_name,
+                   level=logger.INFO)
+
+logger.info("Scanpy information...")
+# Info and hint
+sc.settings.verbosity = 3
+sc.settings.logfile = logging_file_name
+sc.logging.print_versions()
+sc.logging.print_version_and_date()
+logger.info('Random state, {}, is used for all functions needed a randomState setting.'.format(analyzer.random_state))
+logger.info('Default top_rank_genes is {}.'.format(analyzer.n_rank_genes))
+
 # Define two global level variables so that we can control the server's behaviors
 # Use 0 if we dont need to specify the port number
 # Get get the port from sys params
 port = 8999
-if len(sys.argv) > 1 :
-    port = int(sys.argv[1]) # cast to int
-logger.info("Port: ", port)
+if len(sys.argv) > 1:
+    port = int(sys.argv[1])  # cast to int
+logger.info("Port: {}".format(port))
 server = SimpleJSONRPCServer(('localhost', port))
-logger.info("Server initialized at ", server.server_address)
+logger.info("Server initialized at {}".format(server.server_address))
 # Server address is a tupe. The first element is the host and the second is the port number
 isWaiting = True
 # Start the server
-main()
+# main()

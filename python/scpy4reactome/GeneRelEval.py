@@ -9,6 +9,7 @@ from scipy import stats
 # Turn of MI-based relationship calculation from Scribe because of the performance reason.
 # from Scribe import information_estimators as iet
 import math  # check float isNaN
+import logging as logger
 
 DEBUG = False
 # Minumum values for calculation gene relationships
@@ -46,6 +47,7 @@ def calculate_gene_relations(gene_pairs: str,
     # Get a list of gene pairs
     rtn = {}
     delays = [i for i in range(1, delay_window + 1)]
+    logger.info('Calculating gene correlations using {}.'.format(mode))
     for gene_pair in gene_pairs:
         if DEBUG:
             print(gene_pair)

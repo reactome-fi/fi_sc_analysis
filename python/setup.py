@@ -1,6 +1,6 @@
 from setuptools import setup, find_packages
 
-__version__ = '0.1.0'
+__version__ = '0.1.2'
 
 with open("README.md", "r") as f:
     long_description = f.read()
@@ -18,13 +18,14 @@ setup(
     packages=find_packages(),
     install_requires=[
         'jsonrpclib-pelix>=0.4.1',
-        'scanpy>=1.5.1',
+        'scanpy==1.5.1', # Fix to this version since it is used for development
         'networkx>=2.4',
         'scvelo>=0.2.2',
         'python-igraph>=0.8.2',
         'scikit-learn>=0.23.1',  # 0.23 may still be unstable
         'leidenalg>=0.8.1',
         'umap_learn>=0.4.6',
+        'magic_impute>=2.0.3'
     ],
     extras_require={
         'pandas': ['pandas>=1.0.5'],
@@ -35,7 +36,6 @@ setup(
     },
     classifiers=[
         'Programming Language :: Python',
-        'Programming Language :: Python :: 3.6',
         'Programming Language :: Python :: 3.7',
         'License :: OSI Approved :: Apache Software License',
         'Intended Audience :: Developers',
