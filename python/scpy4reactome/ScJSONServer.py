@@ -35,7 +35,7 @@ def scv_velocity(mode):
 
 
 def scv_velocity_plot(gene: str):
-    logger.info('scv_velocity_plot(gene = [])...'.format(gene))
+    logger.info('scv_velocity_plot(gene = {})...'.format(gene))
     adata = analyzer.get_processed_data()
     if gene not in adata.var_names:
         return "error: " + gene + " cannot be found."
@@ -45,7 +45,7 @@ def scv_velocity_plot(gene: str):
 
 
 def scv_rank_velocity_genes():
-    logger.infologger.info('{}...'.format(inspect.currentframe().f_code.co_name))
+    logger.info('{}...'.format(inspect.currentframe().f_code.co_name))
     adata = analyzer.get_processed_data()
     scv.tl.rank_velocity_genes(adata, groupby='leiden', n_genes=analyzer.n_rank_genes)
     return adata.uns['rank_velocity_genes']['names'].tolist()
@@ -110,7 +110,7 @@ def scv_embedding_stream(color_key=None):
 
 
 def open_data(dir_name,
-              method : str):
+              method: str):
     logger.info('open_data(dir_name = {}, method = {})...'.format(dir_name, method))
     adata = analyzer.open_10_genomics_data(dir_name, method)
     analyzer.cache_data(adata)
@@ -145,8 +145,16 @@ def write_data(file_name: str) -> str:
 
 
 def project(dir_name,
+            method: str,
             scv=False):
-    logger.info('project(dir_name = {}, scv = {})...'.format(dir_name, scv))
+    """
+    Project a new data onto the existing one.
+    :param dir_name: the new project directory or file name
+    :param method: the file format. This is the same as in open_data.
+    :param scv: A Bool to check if the RNA veclocity is used.
+    :return:
+    """
+    logger.info('project(dir_name = {}, method = {}, scv = {})...'.format(dir_name, method, scv))
     adata = analyzer.get_processed_data()
     if adata is None:
         return "error: no pre-processed reference data is available."
@@ -154,7 +162,7 @@ def project(dir_name,
         scv = True
     else:
         scv = False
-    merged_data = analyzer.project(dir_name, adata, scv)
+    merged_data = analyzer.project(dir_name, adata, method, scv)
     analyzer.cache_merged_data(merged_data)
     # Return the location of UMAP coordinates for new_data.
     merged_new_data = merged_data[merged_data.obs['batch'] == 'new']
@@ -303,7 +311,7 @@ def rank_genes_groups(groups='all',
     # Generate a disc for return
     rtn = dict()
     for key1 in adata.uns[key]:
-        if key1 is 'params':
+        if key1 == 'params':
             continue  # Don't need to expose this
         values = adata.uns[key][key1]
         values_converted = list()

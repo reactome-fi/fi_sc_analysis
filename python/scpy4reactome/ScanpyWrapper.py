@@ -128,7 +128,7 @@ def scv_velocity(adata,
     adata.uns['paga']['pos'] = _reset_paga_pos(adata)
 
 def open_10_genomics_data(dir,
-                          method = 'read_10x_mtf') :
+                          method = 'read_10x_mtx') :
     """
         Open a 10x genomics data into an annadata object.
     """
@@ -331,6 +331,7 @@ def dpt(adata: AnnData,
 
 def project(new_dir_name: str,
             adata_ref: AnnData,
+            method: str,
             scv: bool = False,
             batch_categories: Optional[str] = None,
 )->AnnData:
@@ -340,6 +341,8 @@ def project(new_dir_name: str,
     preprocess function but with need_scale false.
     :param new_dir_name: the data directory to be projected
     :param adata_ref: the reference data
+    :param method: The file format used for the new data file. The use of this parameter is the same as
+    open_10_genomics_data.
     :param scv: true for scv-based RNA velocity analysis
     :param batch_categories: the name for the reference should be the first element
     :return: return a merged AnnData object with two originally data copied and merged.
@@ -352,7 +355,7 @@ def project(new_dir_name: str,
         adata = scv_open(new_dir_name)
         scv_preprocess(adata)
     else :
-        adata = open_10_genomics_data(new_dir_name)
+        adata = open_10_genomics_data(new_dir_name, method)
         # Make sure we do the same thing as in the original data. But we don't want to keep the original data
         adata = preprocess(adata, copy=False, need_scale=False)
         # Check if we need to do permutation
@@ -367,7 +370,8 @@ def project(new_dir_name: str,
     # slicing the data to make copies
     adata = adata[:, shared_var_names]
     if not scv :
-        # Call regress here so that we have almost the same number of genes selected by the adata_ref (aka highly invariable genes)
+        # Call regress here so that we have almost the same number of genes selected by the adata_ref (aka highly
+        # invariable genes)
         regressout_key = None
         if regressout_uns_key_name in adata.uns_keys() :
             regressout_key = adata.uns[regressout_uns_key_name]
