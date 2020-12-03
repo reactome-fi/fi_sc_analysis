@@ -17,10 +17,13 @@ setup(
     license='Apache',
     packages=find_packages(),
     install_requires=[
+        # It will be much nicer to use the exact versions to avoid any compatibility issue.
         'jsonrpclib-pelix>=0.4.1',
         'scanpy==1.5.1', # Fix to this version since it is used for development
         'networkx>=2.4',
         'scvelo>=0.2.2',
+        'matplotlib==3.1.2', # See this https://stackoverflow.com/questions/24251102/from-matplotlib-import-ft2font-importerror-dll-load-failed-the-specified-pro
+        'tables==3.5.2',# Make sure this version is used. Otherwise, there is a dll cannot find error under windows.
         'python-igraph>=0.8.2',
         'scikit-learn>=0.23.1',  # 0.23 may still be unstable
         'leidenalg>=0.8.1',
