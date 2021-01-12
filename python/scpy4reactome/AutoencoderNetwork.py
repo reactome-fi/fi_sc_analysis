@@ -23,6 +23,8 @@ def gene_autoencoder(adata, n_dim=200, epochs=30):
     # TODO:
     # - add another dense layer for clustered genes based on chemical and physical properties learned from MSigDB-CGP per https://bit.ly/2Rce0YE
     #   section: Incorporate gene sets into the encoder layer
+    #   these are human annotations. https://www.gsea-msigdb.org/gsea/msigdb/collections.jsp#C2
+    #   homology options  https://www.biostars.org/p/209855/
     #   autoenoder architecture should be: input -> MSigDB-CGP (genesets) -> ~200 geneset codings ("superset") -> MSigDB-CGP (genesets) -> output
     # - How to track metadata or "labeled data" pg 576 oreilly to extract and reconstruct anndata via numpy array?
     encoded = Dense(encoding_dim, activation='relu')(input_layer)
@@ -68,7 +70,7 @@ def gene_autoencoder(adata, n_dim=200, epochs=30):
                                           validation_data=(x_val.X.toarray(), x_val.X.toarray()),
                                           verbose=verbose)
     # compressed representation layer - codings - superset
-    encoded_genes = encoder.predict(adata.X.toarray())
+    encoded_genes = encoder.predict(x_val.X.toarray())
     # output layer
     decoded_genes = decoder.predict(encoded_genes)
 
