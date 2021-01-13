@@ -77,6 +77,6 @@ def gene_autoencoder(adata, n_dim=200, epochs=30):
     # TODO: return dictionary - or gene supersets depending on usecase
     # return {'encoded_genes': encoded_genes, 'loss': autoencoder_history, 'decoded_genes': decoded_genes}
     adata.uns['loss'] = autoencoder_history
-    adata.obsm['codings'] = encoded_genes
+    adata.obsm['X_codings'] = encoded_genes
 
     return adata
