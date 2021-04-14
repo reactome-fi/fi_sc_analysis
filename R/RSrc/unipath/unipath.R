@@ -124,7 +124,7 @@ if (species == "mouse"){
 # --------------------------------------
 scores <- adjust(combp, combp_ref)
 # save(scores, file = "scores.RData")
-load("/Users/sanati/Documents/reactome_embeddings/scores.RData")
+load("scores.RData")
 
 # ---------------------------------------
 # Pseudo temporal ordering
