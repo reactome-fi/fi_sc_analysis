@@ -72,7 +72,7 @@ species <- "mouse"
 threshold <- 3 # genesets having number of genes greater than the threshold value provided
 n <- 4 # number of clusters corresponding to type of cells 
 k <- 5 # top k nearest neighbor computation
-Plotting <- T
+plotting <- T
 color.brewer.name <- "Set2"
 
 # --------------------------------------------
@@ -124,7 +124,7 @@ if (species == "mouse"){
 # --------------------------------------
 scores <- adjust(combp, combp_ref)
 # save(scores, file = "scores.RData")
-# load("scores.RData")
+load("/Users/sanati/Documents/reactome_embeddings/scores.RData")
 
 # ---------------------------------------
 # Pseudo temporal ordering
@@ -132,7 +132,7 @@ scores <- adjust(combp, combp_ref)
 # ---------------------------------------
 distclust <- dist_clust(scores$adjpvalog, n=n)
 dist <- distclust$distance
-clusters <- distclust$clusters
+clusters <- distclust$clusters # cell clusters 
 index <- index(scores$adjpvalog, k=k)
 KNN <- KNN(scores$adjpvalog, index, clusters)
 node_class <- class1(clusters, KNN)
@@ -147,9 +147,10 @@ if (plotting == T){
   vertex_color <- brewer.pal(n = n, name = color.brewer.name)
   # TODO:  fetch cell_labels from anndata
   cell_labels <- data.frame(c(rep("E18.5",82), rep("E14.5",44), rep("Adult",46), rep("E16.5",23))) 
-  # TODO: doesn't reproduce paper plots (reverse-engineering to find issue) - calling netbiov function directly for now
-  mst.plot.mod(corr_mst, vertex.color = vertex_color, mst.edge.col="black", 
-                        bg="white", layout.function="layout.kamada.kawai")
+  # mst.plot.mod(corr_mst, vertex.color = vertex_color, mst.edge.col="black", 
+  #                       bg="white", layout.function="layout.kamada.kawai")
+  # Note: bug fix but edges don't draw (ok to move on)
+  UniPath::mst.plot.mod(corr_mst, vertex.color = vertex_color[as.factor(cell_labels[,1])], mst.edge.col="black", bg="white", layout.function="layout.kamada.kawai", v.size = 3, e.size=0.005, mst.e.size = 0.005)
   legend("top", legend = sort(unique(cell_labels[,1])), col = vertex_color,pch=20, box.lty=0, cex=0.6, pt.cex=1.5, horiz=T)
   # TODO: save/return plot 
 }
