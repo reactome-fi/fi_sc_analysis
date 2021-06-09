@@ -4,11 +4,42 @@ import sys
 import inspect
 import scvelo as scv
 import scanpy as sc
-from . import ScanpyWrapper as analyzer
-from . import GeneRelEval as rel
+from . import scanpy_wrapper as analyzer
+from . import gene_rel_eval as rel
+from pathway_analyzer import VegaWrapper as vega
 
 def echo(text):
     return "You sent: " + text
+
+
+def train_vega(gmt_file_name: str,
+               n_epochs: str = "300") -> str:
+    """
+    Train a VEGA vae model
+    :param gmt_file_name:
+    :param n_epochs: the type is string since it goes through json call. Somehow the SJON rpc server cannot
+    automatically convert it into an int.
+    :return:
+    """
+    logger.info("Training VEGA using {}...".format(gmt_file_name))
+    adata = analyzer.get_processed_data()
+    # Train the data using the default parameters
+    vega.train_vega(adata, reactome_gmt=gmt_file_name, n_epochs=int(n_epochs))
+    return str(adata)
+
+
+def vega_pathway_anova() -> dict:
+    logger.info("Perform vega_pathway_anova...")
+    adata = analyzer.get_processed_data()
+    anova_df = vega.perform_pathway_anova(adata)
+    return anova_df.to_dict()  # pd.DataFrame should be converted into dict
+
+
+def vega_pathway_score(pathway: str) -> list:
+    logger.info("get vega pathway score for {}...".format(pathway))
+    adata = analyzer.get_processed_data()
+    pathway_score = vega.get_pathway_score(adata, pathway)
+    return pathway_score.tolist()
 
 
 def scv_open(file_name):
@@ -479,6 +510,9 @@ def main():
     server.register_function(scv_rank_dynamic_genes)
     server.register_function(calculate_gene_relations)
     server.register_function(get_cell_time_keys)
+    server.register_function(train_vega)
+    server.register_function(vega_pathway_score)
+    server.register_function(vega_pathway_anova)
     server.register_function(echo)
     server.register_function(stop)
     logger.info("Start server...")

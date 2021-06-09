@@ -334,7 +334,7 @@ def project(new_dir_name: str,
             method: str,
             scv: bool = False,
             batch_categories: Optional[str] = None,
-)->AnnData:
+            )->AnnData:
     """
     This function is used to project adata to adata_ref using ingest function in scanpy. The procedures here are based
     on the tutorial: integration-data-using-inject. Both adata ad adata_ref should have been preprocessed by running the
