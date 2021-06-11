@@ -1,24 +1,29 @@
 """
 This package is used to do pathway enrichment analysis by adoptiong ccommonly used algorithms.
 """
-import statsmodels.stats.multitest
-import numpy as np
-import scanpy as sc
-import pandas as pd
-import statsmodels.api as sm
 import os
-import vega
-import torch
-import gseapy as gp
-
-from statsmodels.formula.api import ols
-from anndata import AnnData
 from collections import OrderedDict
-from scipy import sparse
+from logging import info
 from typing import Optional, Union
 
+import gseapy as gp
+import numpy as np
+import pandas as pd
+import scanpy as sc
+import statsmodels.api as sm
+import statsmodels.stats.multitest
+import torch
+import vega
+from anndata import AnnData
+from pyscenic import aucell
+from pyscenic.genesig import GeneSignature
+from scipy import sparse
+from seaborn import clustermap
+from statsmodels.formula.api import ols
 
-def _load_data(adata: Union[AnnData, str]):
+
+def _load_data(adata: Union[AnnData, str],
+               need_transpose: bool = True):
     """
     Just a simple utility method to load the expression data if needed.
     :param adata:
@@ -29,7 +34,9 @@ def _load_data(adata: Union[AnnData, str]):
         adata = sc.read_h5ad(adata)
     if isinstance(adata, AnnData):
         # Convert the adata into a DataFrame
-        adata_df = adata.to_df().T  # Use the expression matrix and make sure genes for rows and cells for cols
+        adata_df = adata.to_df()  # Use the expression matrix and make sure genes for rows and cells for cols
+        if need_transpose:
+            adata_df = adata_df.T
     elif isinstance(adata, pd.DataFrame):
         adata_df = adata
     else:
@@ -86,6 +93,9 @@ class PathwayAnalyzer(object):
                                "pathway": pathway_scores})
             model = ols("pathway ~ C(cluster)", data=df).fit()
             aov_table = sm.stats.anova_lm(model, typ=2)
+            # Escape in case nothing there
+            if np.isnan(aov_table["F"][0]):
+                continue
             results_dict[pathway] = [aov_table["F"][0], aov_table["PR(>F)"][0]]
             # if i == 50:
             #     break
@@ -160,7 +170,7 @@ class VegaWrapper(PathwayAnalyzer):
 
     def train_vega(self,
                    adata: AnnData,
-                   reactome_gmt: str = None,
+                   reactome_gmt: Union[dict, str],
                    reactome_dict: OrderedDict = None,
                    n_unannotated: int = 1,
                    fully_connected: bool = True,
@@ -217,6 +227,7 @@ class VegaWrapper(PathwayAnalyzer):
         # Need to keep the pathway list
         self.adata = adata # Make sure this is called before the next statement
 
+
 class GSEAPyWrapper(PathwayAnalyzer):
     """
     A wrapper of GSEAPY for doing ssgsea pathway analysis: https://gseapy.readthedocs.io/en/latest/index.html
@@ -256,6 +267,49 @@ class GSEAPyWrapper(PathwayAnalyzer):
             return pd.DataFrame(ss.resultsOnSamples)
 
 
+class AUCellWrapper(PathwayAnalyzer):
+    """
+    The wrapper for doing AUCell based pathway analysis based on pyScenic: https://pyscenic.readthedocs.io/en/latest/
+    """
+    def __init__(self):
+        super(AUCellWrapper, self).__init__()
+        self.adata_key = "X_aucell"
+
+    def aucell(self,
+               adata: Union[AnnData, str],
+               reactome_gmt: Union[OrderedDict, str],
+               filter_with_max_score: float = None,
+               need_plot: bool = False
+               ) -> Optional[pd.DataFrame]:
+        """
+        Perform aucell-based pathway analysis. The code here is based on Example 2: Gene signatures from a GMT
+        file from https://github.com/aertslab/pySCENIC/blob/master/notebooks/pySCENIC%20-%20AUCell%20example.ipynb.
+        :param adata:
+        :param reactome_gmt:
+        :param filter_with_max_score: pathway cols with this max values will be filtered out
+        :param need_plot: true to generate a hierarchical clustering map
+        :return:
+        """
+        adata, adata_df = _load_data(adata, need_transpose=False)
+        genesets_dict = _load_reactome_gmt(reactome_gmt)
+        # Need to convert genesets_dict to list of GeneSignatures
+        gene_signatures = [GeneSignature(name=name, gene2weight=genes) for name, genes in genesets_dict.items()]
+        # Get the percentiles for genes that should be used
+        percentiles = aucell.derive_auc_threshold(adata_df)
+        aucs_matrix = aucell.aucell(adata_df, gene_signatures, percentiles[0.01])
+        if filter_with_max_score is not None: # Do a filtering
+            info("The size of aucx_matrix before filtering: {}".format(aucs_matrix.shape))
+            aucs_matrix = aucs_matrix.loc[:,
+                          [col for col in aucs_matrix.columns if aucs_matrix.loc[:, col].max() > filter_with_max_score]]
+            info("The size of aucx_matrix after filtering: {}".format(aucs_matrix.shape))
+        if need_plot:
+            clustermap(aucs_matrix, figsize=(14, 14)) # Give a larger figure size
+        # Store the information
+        adata.obsm[self.adata_key] = aucs_matrix
+        self.adata = adata
+        return aucs_matrix
+
+
 def reactome_ssgsea(adata: Union[AnnData, str],
                    reactome_gmt: Union[dict, str]) -> PathwayAnalyzer:
     """
@@ -283,6 +337,20 @@ def reactome_vega(adata: Union[AnnData, str],
     return vega_wrapper
 
 
+def reactome_aucell(adata: Union[AnnData, str],
+                    reactome_gmt: Union[dict, str],
+                    filter_with_max_score: float = 0.001,
+                    need_plot: bool = False) -> PathwayAnalyzer:
+    """
+    Perform aucell-based pathway analysis for Reactome pathways.
+    """
+    aucell_wrapper = AUCellWrapper()
+    aucell_wrapper.aucell(adata,
+                          reactome_gmt,
+                          filter_with_max_score=filter_with_max_score,
+                          need_plot=need_plot)
+    return aucell_wrapper
+
 def test_reactome_ssgsea():
     adata = sc.read_h5ad("/Users/wug/Documents/wgm/work/FIPlugIns/test_data/ScRNASeq/SavedResults/mouse/17_5_gfp.h5ad")
     # Just need the first 10 cells for this test
@@ -296,3 +364,9 @@ def test_reactome_vega():
     reactome_gmt = "data/vega/MouseReactomePathways_Rel_75_122220.gmt"
     return reactome_vega(adata, reactome_gmt, n_epochs=3)
 
+def test_reactome_aucell():
+    # Need to use all expression data without filtering
+    file_name = "/Users/wug/Documents/missy_single_cell/seq_data_v2/17_5_gfp/filtered_feature_bc_matrix"
+    adata = sc.read_10x_mtx(file_name, cache=True)
+    reactome_gmt = "data/vega/MouseReactomePathways_Rel_75_122220.gmt"
+    return reactome_aucell(adata, reactome_gmt, 0.01, False)
