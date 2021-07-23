@@ -188,7 +188,7 @@ def preprocess(adata, copy=False, need_scale=True, regressout_keys = None, imput
             adata.X -= min_value
         # Mark for imputation
         adata.uns[imputation_uns_key_name] = {"method": "magic", "solver": solver, "min_value": min_value}
-    adata.raw = adata # We will use imputated as row if imputation is done.
+    adata.raw = adata # We will use imputated as raw if imputation is done.
     # Mark genes with highly_variable flag
     # Default parameters are used in this function call.
     sc.pp.highly_variable_genes(adata)

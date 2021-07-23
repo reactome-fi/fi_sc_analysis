@@ -1,45 +1,81 @@
+from anndata import AnnData
 from jsonrpclib.SimpleJSONRPCServer import SimpleJSONRPCServer
 import logging as logger
 import sys
 import inspect
 import scvelo as scv
 import scanpy as sc
+from typing import Optional
+
 from . import scanpy_wrapper as analyzer
 from . import gene_rel_eval as rel
-from pathway_analyzer import VegaWrapper as vega
+from . import pathway_analyzer as pa
+
 
 def echo(text):
     return "You sent: " + text
 
 
-def train_vega(gmt_file_name: str,
-               n_epochs: str = "300") -> str:
+def analyze_pathways(gmt_file_name: str,
+                     method: str = "ssgsea",
+                     need_rtn: str = "false") -> Optional[str]:
     """
-    Train a VEGA vae model
-    :param gmt_file_name:
-    :param n_epochs: the type is string since it goes through json call. Somehow the SJON rpc server cannot
-    automatically convert it into an int.
+    conduct pathway analysis.
+    :param gmt_file_name: the reactome gmt file.
+    :param method: one of ssgsea and aucell, which are supported currently
+    :param need_rtn: true for returning the analysis results as a json text
+    otherwiser, return the key for saved analysis results in the object. Need to use str here
+    since json api cannot automatically convert it into a Boolean even though it is typed as it.
+    :return: json text of the calculated pathway activities
+    """
+    if method != "ssgsea" and method != "aucell":
+        return "Method {} is not supported. Only ssgsea and aucell are supported now."
+    logger.info("Perform pathway analysis using {} via method {}".format(gmt_file_name, method))
+    adata = analyzer.get_processed_data()
+    if adata is None:
+        return "error: no processed data is available."
+    # Is raw is available, use raw so that we have all genes
+    # To copy the results back to the main adata
+    adata.used = adata
+    if adata.raw is not None:
+        # Need to find the actual adata
+        if isinstance(adata.raw, AnnData):
+            adata.used = adata.raw
+        else:
+            adata.used = adata.raw.to_adata() # Have to call this and cannot use _adata, which is the same as the adat
+    if method == "ssgsea":
+        results = pa.reactome_ssgsea(adata.used, gmt_file_name)
+    elif method == "aucell":
+        results = pa.reactome_aucell(adata.used, gmt_file_name)
+    if results is None:
+        return "error: Cannot perform a pathway analysis."
+    # The pathway scores are in a panda DataFrames, which can be converted into json.
+    if id(adata) != id(adata.used): # Keep the analysis results in the original adata is it is not the same
+        adata.obsm[results.adata_key] = results.adata.obsm[results.adata_key]
+    if need_rtn == "true":
+        return results.adata.obsm[results.adata_key].to_dict() # Use dictionay for easy handling at the Java end
+    else:
+        return results.adata_key
+
+
+def anova_pathway(adata_key: str) -> str:
+    """
+    Perform pathway anova analysis for clusters.
+    :param adata_key: the key used to save the pathway analysis results.
     :return:
     """
-    logger.info("Training VEGA using {}...".format(gmt_file_name))
+    # Make sure adata_key is there
     adata = analyzer.get_processed_data()
-    # Train the data using the default parameters
-    vega.train_vega(adata, reactome_gmt=gmt_file_name, n_epochs=int(n_epochs))
-    return str(adata)
-
-
-def vega_pathway_anova() -> dict:
-    logger.info("Perform vega_pathway_anova...")
-    adata = analyzer.get_processed_data()
-    anova_df = vega.perform_pathway_anova(adata)
-    return anova_df.to_dict()  # pd.DataFrame should be converted into dict
-
-
-def vega_pathway_score(pathway: str) -> list:
-    logger.info("get vega pathway score for {}...".format(pathway))
-    adata = analyzer.get_processed_data()
-    pathway_score = vega.get_pathway_score(adata, pathway)
-    return pathway_score.tolist()
+    if adata_key not in adata.obsm.keys():
+        return "error: {} not in the obsm keys. Run pathway analysis first with the required method.".format(adata_key)
+    # Use a PathwayAnalyer object to do this
+    annova_analyzer = pa.PathwayAnalyzer()
+    annova_analyzer.adata = adata
+    annova_analyzer.adata_key = adata_key
+    results = annova_analyzer.perform_pathway_anova()
+    # results is a DataFrame. Though DataFrame has to_json() function, however, the Java end prefers to use
+    # dict. Therefore, we have this converting.
+    return results.to_dict(orient="index") # Keyed by pathways
 
 
 def scv_open(file_name):
@@ -177,7 +213,7 @@ def write_data(file_name: str) -> str:
 
 def project(dir_name,
             method: str,
-            scv=False):
+            scv: bool = False):
     """
     Project a new data onto the existing one.
     :param dir_name: the new project directory or file name
@@ -510,9 +546,8 @@ def main():
     server.register_function(scv_rank_dynamic_genes)
     server.register_function(calculate_gene_relations)
     server.register_function(get_cell_time_keys)
-    server.register_function(train_vega)
-    server.register_function(vega_pathway_score)
-    server.register_function(vega_pathway_anova)
+    server.register_function(analyze_pathways)
+    server.register_function(anova_pathway)
     server.register_function(echo)
     server.register_function(stop)
     logger.info("Start server...")
