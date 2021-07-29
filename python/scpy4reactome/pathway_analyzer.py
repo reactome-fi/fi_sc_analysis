@@ -24,6 +24,11 @@ from scipy import sparse
 from seaborn import clustermap
 from statsmodels.formula.api import ols
 
+# Pathway analysis keys
+SSGSEA_KEY = "X_ssgsea"
+AUCELL_KEY = "X_aucell"
+TF_SSGSEA_KEY = "X_tf_ssgsea"
+TF_AUCELL_KEY = "X_tf_aucell"
 
 def _load_data(adata: Union[AnnData, str],
                need_transpose: bool = True):
@@ -410,7 +415,7 @@ class ReactomeSSGSEA(SingleSampleGSEA):
         # save results
         for i, temp in enumerate(tempes):
             name = names[i]  # cell id
-            self._logger.info("Calculate Enrichment Score for Sample: %s " % name)
+            self._logger.debug("Calculate Enrichment Score for Sample: %s " % name)
             es, esnull, hit_ind, RES = temp
             # save results
             self.resultsOnSamples[name] = pd.Series(data=es, index=subsets, name=name)
@@ -422,11 +427,12 @@ class GSEAPyWrapper(PathwayAnalyzer):
     """
     def __init__(self):
         super().__init__()
-        self.adata_key = "X_ssgsea"
+        self.adata_key = SSGSEA_KEY
 
     def ssgsea(self,
                adata: Union[str, AnnData],
                reactome_gmt: Union[str, dict],
+               data_key: str,
                weigted_score_type: float = 0.25,
                n_processes: int = 1
                ) -> Optional[pd.DataFrame]:
@@ -434,10 +440,13 @@ class GSEAPyWrapper(PathwayAnalyzer):
         Perform ssgsea analysis
         :param adata: an AnnData object or a hd5 file
         :param reactome_gmt:
+        :param data_key
         :param weigted_score_type
         :param n_processes
         :return:
         """
+        if data_key is not None:
+            self.adata_key = data_key
         adata, adata_df = _load_data(adata)
         genesets_dict = _load_reactome_gmt(reactome_gmt)
 
@@ -467,11 +476,12 @@ class AUCellWrapper(PathwayAnalyzer):
     """
     def __init__(self):
         super(AUCellWrapper, self).__init__()
-        self.adata_key = "X_aucell"
+        self.adata_key = AUCELL_KEY
 
     def aucell(self,
                adata: Union[AnnData, str],
                reactome_gmt: Union[OrderedDict, str],
+               data_key: str,
                filter_with_max_score: float = 0.0001, # Default filter to avoid generating too many zeros.
                need_plot: bool = False
                ) -> Optional[pd.DataFrame]:
@@ -484,6 +494,8 @@ class AUCellWrapper(PathwayAnalyzer):
         :param need_plot: true to generate a hierarchical clustering map
         :return:
         """
+        if data_key is not None:
+            self.adata_key = data_key
         adata, adata_df = _load_data(adata, need_transpose=False)
         genesets_dict = _load_reactome_gmt(reactome_gmt)
         # Need to convert genesets_dict to list of GeneSignatures
@@ -505,7 +517,8 @@ class AUCellWrapper(PathwayAnalyzer):
 
 
 def reactome_ssgsea(adata: Union[AnnData, str],
-                   reactome_gmt: Union[dict, str]) -> PathwayAnalyzer:
+                    reactome_gmt: Union[dict, str],
+                    data_key: str = SSGSEA_KEY) -> PathwayAnalyzer:
     """
     Perform ssgsea analysis based on Reactome pathways
     :param adata:
@@ -513,7 +526,7 @@ def reactome_ssgsea(adata: Union[AnnData, str],
     :return:
     """
     gsea_wrapper = GSEAPyWrapper()
-    gsea_wrapper.ssgsea(adata, reactome_gmt)
+    gsea_wrapper.ssgsea(adata, reactome_gmt, data_key)
     return gsea_wrapper
 
 
@@ -533,6 +546,7 @@ def reactome_vega(adata: Union[AnnData, str],
 
 def reactome_aucell(adata: Union[AnnData, str],
                     reactome_gmt: Union[dict, str],
+                    data_key: str = AUCELL_KEY,
                     filter_with_max_score: float = None, # Default don't do any filtering
                     need_plot: bool = False) -> PathwayAnalyzer:
     """
@@ -541,9 +555,40 @@ def reactome_aucell(adata: Union[AnnData, str],
     aucell_wrapper = AUCellWrapper()
     aucell_wrapper.aucell(adata,
                           reactome_gmt,
+                          data_key,
                           filter_with_max_score=filter_with_max_score,
                           need_plot=need_plot)
     return aucell_wrapper
+
+
+def load_dorothea_data(file_name: str,
+                       confidence_levels: str = ['A','B']):
+    """
+    Load the Dorothea TF/target interactions data into a dict so that it can be used for
+    pathway activities analysis.
+    :param file_name:
+    :param confidence_levels:
+    :return:
+    """
+    file = open(file_name)
+    tf_genes = dict()
+    if isinstance(confidence_levels, str):
+        confidence_levels = [confidence_levels]
+    # escape the first line
+    line = file.readline()
+    while True:
+        line = file.readline()
+        if not line:
+            break
+        # tf\tconfidence\ttarget\tmor
+        tokens = line.split("\t")
+        if not tokens[1] in confidence_levels:
+            continue
+        if not tokens[0] in tf_genes.keys():
+            tf_genes[tokens[0]] = []
+        tf_genes[tokens[0]].append(tokens[2]) # Don't care about the action mode
+    file.close()
+    return tf_genes
 
 
 def test_reactome_ssgsea():

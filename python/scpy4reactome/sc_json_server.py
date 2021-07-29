@@ -1,3 +1,4 @@
+import pandas as pd
 from anndata import AnnData
 from jsonrpclib.SimpleJSONRPCServer import SimpleJSONRPCServer
 import logging as logger
@@ -6,6 +7,7 @@ import inspect
 import scvelo as scv
 import scanpy as sc
 from typing import Optional
+from typing import Union
 
 from . import scanpy_wrapper as analyzer
 from . import gene_rel_eval as rel
@@ -14,6 +16,26 @@ from . import pathway_analyzer as pa
 
 def echo(text):
     return "You sent: " + text
+
+
+def analyze_tfs(dorothea_file_name: str,
+                method: str = "ssgsea",
+                need_rtn: str = "false") -> Optional[str]:
+    """
+    Perform TF activities analysis using a Dorothea file for interactions.
+    :param dorothea_file_name:
+    :param method:
+    :param need_rtn:
+    :return:
+    """
+    logger.info("Perform transcriptional factor analysis using {} via method {}".format(dorothea_file_name, method))
+    tf_genes = pa.load_dorothea_data(dorothea_file_name)
+    data_key = None
+    if method == "ssgsea":
+        data_key = pa.TF_SSGSEA_KEY
+    elif method == "aucell":
+        data_key = pa.TF_AUCELL_KEY
+    return _analyze_pathways(tf_genes, method, data_key, need_rtn)
 
 
 def analyze_pathways(gmt_file_name: str,
@@ -28,9 +50,16 @@ def analyze_pathways(gmt_file_name: str,
     since json api cannot automatically convert it into a Boolean even though it is typed as it.
     :return: json text of the calculated pathway activities
     """
-    if method != "ssgsea" and method != "aucell":
-        return "Method {} is not supported. Only ssgsea and aucell are supported now."
     logger.info("Perform pathway analysis using {} via method {}".format(gmt_file_name, method))
+    return _analyze_pathways(gmt_file_name, method, None, need_rtn)
+
+
+def _analyze_pathways(gmt_file_name: Union[str, dict],
+                      method: str,
+                      data_key: str,
+                      need_rtn: str):
+    if method != "ssgsea" and method != "aucell":
+        return "error: Method {} is not supported. Only ssgsea and aucell are supported now.".format(method)
     adata = analyzer.get_processed_data()
     if adata is None:
         return "error: no processed data is available."
@@ -42,18 +71,24 @@ def analyze_pathways(gmt_file_name: str,
         if isinstance(adata.raw, AnnData):
             adata.used = adata.raw
         else:
-            adata.used = adata.raw.to_adata() # Have to call this and cannot use _adata, which is the same as the adat
+            adata.used = adata.raw.to_adata()  # Have to call this and cannot use _adata, which is the same as the adat
     if method == "ssgsea":
-        results = pa.reactome_ssgsea(adata.used, gmt_file_name)
+        if data_key is None:
+            results = pa.reactome_ssgsea(adata.used, gmt_file_name)
+        else:
+            results = pa.reactome_ssgsea(adata.used, gmt_file_name, data_key)
     elif method == "aucell":
-        results = pa.reactome_aucell(adata.used, gmt_file_name)
+        if data_key is None:
+            results = pa.reactome_aucell(adata.used, gmt_file_name)
+        else:
+            results = pa.reactome_aucell(adata.used, gmt_file_name, data_key)
     if results is None:
         return "error: Cannot perform a pathway analysis."
     # The pathway scores are in a panda DataFrames, which can be converted into json.
-    if id(adata) != id(adata.used): # Keep the analysis results in the original adata is it is not the same
+    if id(adata) != id(adata.used):  # Keep the analysis results in the original adata is it is not the same
         adata.obsm[results.adata_key] = results.adata.obsm[results.adata_key]
     if need_rtn == "true":
-        return results.adata.obsm[results.adata_key].to_dict() # Use dictionay for easy handling at the Java end
+        return results.adata.obsm[results.adata_key].to_dict()  # Use dictionay for easy handling at the Java end
     else:
         return results.adata_key
 
@@ -76,6 +111,24 @@ def anova_pathway(adata_key: str) -> str:
     # results is a DataFrame. Though DataFrame has to_json() function, however, the Java end prefers to use
     # dict. Therefore, we have this converting.
     return results.to_dict(orient="index") # Keyed by pathways
+
+
+def pathway_activities(pathway: str,
+                       adata_key: str) -> str:
+    """
+    Fetch the pathway activities.
+    :param pathway:
+    :param adata_key:
+    :return:
+    """
+    # Make sure adata_key is there
+    adata = analyzer.get_processed_data()
+    if adata_key not in adata.obsm.keys():
+        return "error: {} not in the obsm keys. Run pathway analysis first with the required method.".format(adata_key)
+    # This should return a DataFrame
+    results = adata.obsm[adata_key]
+    # Convert from Series to a dict for Java
+    return results[pathway].to_dict()
 
 
 def scv_open(file_name):
@@ -547,7 +600,9 @@ def main():
     server.register_function(calculate_gene_relations)
     server.register_function(get_cell_time_keys)
     server.register_function(analyze_pathways)
+    server.register_function(analyze_tfs)
     server.register_function(anova_pathway)
+    server.register_function(pathway_activities)
     server.register_function(echo)
     server.register_function(stop)
     logger.info("Start server...")
