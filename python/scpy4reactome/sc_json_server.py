@@ -29,7 +29,9 @@ def analyze_tfs(dorothea_file_name: str,
     :return:
     """
     logger.info("Perform transcriptional factor analysis using {} via method {}".format(dorothea_file_name, method))
-    tf_genes = pa.load_dorothea_data(dorothea_file_name)
+    # The download file has been filtered for confidence levels
+    # Therefore here we will use all evidences
+    tf_genes = pa.load_dorothea_data(dorothea_file_name, list('ABCDE'))
     data_key = None
     if method == "ssgsea":
         data_key = pa.TF_SSGSEA_KEY
