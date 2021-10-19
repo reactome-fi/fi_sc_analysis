@@ -6,7 +6,7 @@ import os
 import time
 from collections import OrderedDict
 from logging import info
-from typing import Optional, Union
+from typing import Optional, Union, List
 
 import numpy as np
 import pandas as pd
@@ -23,6 +23,7 @@ from pyscenic.genesig import GeneSignature
 from scipy import sparse
 from seaborn import clustermap
 from statsmodels.formula.api import ols
+from scipy.stats import zscore
 
 # Pathway analysis keys
 SSGSEA_KEY = "X_ssgsea"
@@ -77,6 +78,16 @@ class PathwayAnalyzer(object):
         self.adata_key = "pathway"  # hold the key to be used in anndata
         self.pathway_list_key = "PATHWAY_LIST_KEY"
         self.adata = None
+
+    def scale_pathways(self,
+                       pathway_scores: pd.DataFrame) -> pd.DataFrame:
+        """
+        Perform scale for individual values bewteen 0 and 1.
+        :param pathway_scores:
+        :return:
+        """
+        rtn = (pathway_scores - pathway_scores.min()) / (pathway_scores.max() - pathway_scores.min())
+        return rtn
 
     def perform_pathway_anova(self,
                               cluster_key: str = "leiden") -> pd.DataFrame:
@@ -483,7 +494,8 @@ class AUCellWrapper(PathwayAnalyzer):
                reactome_gmt: Union[OrderedDict, str],
                data_key: str,
                filter_with_max_score: float = 0.0001, # Default filter to avoid generating too many zeros.
-               need_plot: bool = False
+               need_plot: bool = False,
+               need_scale: bool = True
                ) -> Optional[pd.DataFrame]:
         """
         Perform aucell-based pathway analysis. The code here is based on Example 2: Gene signatures from a GMT
@@ -492,6 +504,7 @@ class AUCellWrapper(PathwayAnalyzer):
         :param reactome_gmt:
         :param filter_with_max_score: pathway cols with this max values will be filtered out
         :param need_plot: true to generate a hierarchical clustering map
+        :param need_scale: true for scale for individual pathways
         :return:
         """
         if data_key is not None:
@@ -502,12 +515,15 @@ class AUCellWrapper(PathwayAnalyzer):
         gene_signatures = [GeneSignature(name=name, gene2weight=genes) for name, genes in genesets_dict.items()]
         # Get the percentiles for genes that should be used
         percentiles = aucell.derive_auc_threshold(adata_df)
-        aucs_matrix = aucell.aucell(adata_df, gene_signatures, percentiles[0.01])
+        # Choose top 5 percentiles genes. This may need to be parameterized.
+        aucs_matrix = aucell.aucell(adata_df, gene_signatures, percentiles[0.05])
         if filter_with_max_score is not None: # Do a filtering
             info("The size of aucx_matrix before filtering: {}".format(aucs_matrix.shape))
             aucs_matrix = aucs_matrix.loc[:,
                           [col for col in aucs_matrix.columns if aucs_matrix.loc[:, col].max() > filter_with_max_score]]
             info("The size of aucx_matrix after filtering: {}".format(aucs_matrix.shape))
+        if need_scale:
+            aucs_matrix = super().scale_pathways(aucs_matrix)
         if need_plot:
             clustermap(aucs_matrix, figsize=(14, 14)) # Give a larger figure size
         # Store the information
@@ -547,7 +563,7 @@ def reactome_vega(adata: Union[AnnData, str],
 def reactome_aucell(adata: Union[AnnData, str],
                     reactome_gmt: Union[dict, str],
                     data_key: str = AUCELL_KEY,
-                    filter_with_max_score: float = None, # Default don't do any filtering
+                    filter_with_max_score: float = 1.0E-4, # Default with 0.0001
                     need_plot: bool = False) -> PathwayAnalyzer:
     """
     Perform aucell-based pathway analysis for Reactome pathways.
@@ -559,6 +575,45 @@ def reactome_aucell(adata: Union[AnnData, str],
                           filter_with_max_score=filter_with_max_score,
                           need_plot=need_plot)
     return aucell_wrapper
+
+
+def fetch_analyzed_pathway_keys(adata : AnnData) -> List[str]:
+    """
+    Get the keys for analyzed pathway activities.
+    :param adata:
+    :return:
+    """
+    rtn_keys = list()
+    if AUCELL_KEY in adata.obsm.keys():
+        rtn_keys.append(AUCELL_KEY)
+    if SSGSEA_KEY in adata.obsm.keys():
+        rtn_keys.append(SSGSEA_KEY)
+    return rtn_keys
+
+
+def fetch_cluster_pathway_activities(adata: AnnData,
+                                     cluster: str,
+                                     pathway_activity_key: str = [SSGSEA_KEY, AUCELL_KEY],
+                                     cluster_key: str = "leiden") -> pd.Series:
+    """
+    Fetch the median of pathway activities for a cluster
+    :param adata:
+    :param cluster_key: the cluster algorithm name
+    :param cluster: the cluster to be selected
+    :param pathway_activity_key:
+    :return:
+    """
+    # Make sure pathway has been analyzes
+    if pathway_activity_key not in adata.obsm.keys():
+        raise ValueError("Cannot find key in adata.obsm for {}.".format(pathway_activity_key))
+    # Make sure cluster_key is in there
+    if cluster_key not in adata.obs.keys():
+        raise ValueError("Cannot find key in adata.obs for {}".format(cluster))
+    # Get the cells
+    cell_cluster = adata.obs[cluster_key] == str(cluster) # Just in case cluster is an int
+    cluster_pathways = adata.obsm[pathway_activity_key].loc[cell_cluster, :]
+    cluster_pathway_median = cluster_pathways.median()
+    return cluster_pathway_median
 
 
 def load_dorothea_data(file_name: str,
@@ -618,7 +673,7 @@ def test_reactome_aucell():
     file_name = "/Users/wug/Documents/missy_single_cell/seq_data_v2/17_5_gfp/filtered_feature_bc_matrix"
     adata = sc.read_10x_mtx(file_name, cache=True)
     # adata = sc.read_h5ad("/Users/wug/Documents/wgm/work/FIPlugIns/test_data/ScRNASeq/SavedResults/mouse/17_5_gfp.h5ad")
-    reactome_gmt = "../data/gmt/MouseReactomePathways_Rel_75_122220.gmt"
+    reactome_gmt = "data/gmt/MouseReactomePathways_Rel_75_122220.gmt"
     return reactome_aucell(adata, reactome_gmt, 0.01, False)
 
 # test_reactome_ssgsea()

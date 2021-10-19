@@ -56,6 +56,26 @@ def analyze_pathways(gmt_file_name: str,
     return _analyze_pathways(gmt_file_name, method, None, need_rtn)
 
 
+def fetch_cluster_pathway_activities(pathway_key: str,
+                                     cluster: str):
+    logger.info('{}...'.format(inspect.currentframe().f_code.co_name))
+    adata = analyzer.get_processed_data()
+    if pathway_key not in adata.obsm.keys():
+        return "error: {} doesn't exist. Run the pathway activity analysis first.".format(pathway_key)
+    # Assume cluster is there always in our pipeline. So don't check it here.
+    results = pa.fetch_cluster_pathway_activities(adata, cluster, pathway_key)
+    # Results is a Serise. Convert to dict for JSON
+    return results.to_dict()
+
+
+def get_analyzed_pathway_keys() -> list:
+    logger.info('{}...'.format(inspect.currentframe().f_code.co_name))
+    adata = analyzer.get_processed_data()
+    if adata is None:
+        return "error: no pre-processed data available."
+    return pa.fetch_analyzed_pathway_keys(adata)
+
+
 def _analyze_pathways(gmt_file_name: Union[str, dict],
                       method: str,
                       data_key: str,
@@ -102,6 +122,7 @@ def anova_pathway(adata_key: str) -> str:
     :return:
     """
     # Make sure adata_key is there
+    logger.info('{}...'.format(inspect.currentframe().f_code.co_name))
     adata = analyzer.get_processed_data()
     if adata_key not in adata.obsm.keys():
         return "error: {} not in the obsm keys. Run pathway analysis first with the required method.".format(adata_key)
@@ -124,6 +145,7 @@ def pathway_activities(pathway: str,
     :return:
     """
     # Make sure adata_key is there
+    logger.info('pathway activities for {} in {}...'.format(pathway, adata_key))
     adata = analyzer.get_processed_data()
     if adata_key not in adata.obsm.keys():
         return "error: {} not in the obsm keys. Run pathway analysis first with the required method.".format(adata_key)
@@ -605,6 +627,8 @@ def main():
     server.register_function(analyze_tfs)
     server.register_function(anova_pathway)
     server.register_function(pathway_activities)
+    server.register_function(fetch_cluster_pathway_activities)
+    server.register_function(get_analyzed_pathway_keys)
     server.register_function(echo)
     server.register_function(stop)
     logger.info("Start server...")
