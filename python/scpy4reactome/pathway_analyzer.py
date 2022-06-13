@@ -13,17 +13,13 @@ import pandas as pd
 import scanpy as sc
 import statsmodels.api as sm
 import statsmodels.stats.multitest
-import torch
-import vega
 from anndata import AnnData
 from gseapy.gsea import SingleSampleGSEA
 from joblib import Parallel, delayed
 from pyscenic import aucell
 from pyscenic.genesig import GeneSignature
-from scipy import sparse
 from seaborn import clustermap
 from statsmodels.formula.api import ols
-from scipy.stats import zscore
 
 # Pathway analysis keys
 SSGSEA_KEY = "X_ssgsea"
@@ -63,10 +59,34 @@ def _load_reactome_gmt(reactome_gmt: Union[dict, str]):
     if isinstance(reactome_gmt, dict):
         genesets_dict = reactome_gmt
     elif os.path.isfile(reactome_gmt):
-        genesets_dict = vega.read_gmt(reactome_gmt)
+        genesets_dict = _read_reactome_gmt(reactome_gmt)
     else:
         raise Exception("Error in parsing reactome_gmt: Need a dict or file name.")
     return genesets_dict
+
+
+# The following function is modified from VEGA: https://github.com/LucasESBS/vega/blob/c74b8582148126930c4a3405c9cde4e0f2769dda/vega/utils.py#L124
+# The function copied here to avoid the dependency to VEGA.
+def _read_reactome_gmt(fname):
+    """
+    Read GMT file into an OrderedDict.
+
+    Args:
+        fname (str): Path to gmt file
+        sep (str): Separator used to read gmt file.
+        min_g (int): Minimum of gene members in gene module.
+        max_g (int): Maximum of gene members in gene module.
+    Returns:
+        OrderedDict: Dictionary of gene_module:genes.
+    """
+    dict_pathway = OrderedDict()
+    with open(fname) as f:
+        lines = f.readlines()
+        for line in lines:
+            line = line.strip()
+            val = line.split("\t")
+            dict_pathway[val[0]] = val[2:]
+    return dict_pathway
 
 
 class PathwayAnalyzer(object):
@@ -154,12 +174,16 @@ class PathwayAnalyzer(object):
 
     def color_pathway_umap(self,
                            pathways: list or str,
-                           color_cluster: bool = True
+                           color_cluster: bool = True,
+                           obs_name_prefix: str = ''
                            ) -> None:
         """
         Color cells in the umap plot based on the inferred pathway scores from trained VEGA.
         :param adata:
         :param pathway:
+        :param color_cluster: check if clusters should be plotted too.
+        :param obs_name_prefix: For TF, we need to add "tf_" before the obs name to avoid conflict with
+        the original gene names.
         :return:
         """
         self._check_adata()
@@ -172,78 +196,12 @@ class PathwayAnalyzer(object):
             pathway_index = pathway_list.index(pathway)  # Get the first pathway index. There should be one only.
             pathway_score = pathway_activities.iloc[:, pathway_index]
             # Need to register it into the observation for plot
-            self.adata.obs[pathway] = pathway_score
-            color_names.append(pathway)
+            key_name = obs_name_prefix + pathway
+            self.adata.obs[key_name] = pathway_score
+            color_names.append(key_name)
         if color_cluster:
             color_names.append("leiden")
         sc.pl.umap(self.adata, color=color_names)
-
-class VegaWrapper(PathwayAnalyzer):
-    """
-    A wrappr to train a VEGA model for pathway analysis.
-    """
-    def __init__(self):
-        super().__init__()
-        self.adata_key = "X_vega"
-
-    def train_vega(self,
-                   adata: AnnData,
-                   reactome_gmt: Union[dict, str],
-                   reactome_dict: OrderedDict = None,
-                   n_unannotated: int = 1,
-                   fully_connected: bool = True,
-                   dropout: float = 0.5,
-                   beta: float = 0.00005,
-                   positive_decoder: bool = True,
-                   batch_size: int = 64,
-                   shuffle: bool = True,
-                   learning_rate: float = 1.0e-4,
-                   n_epochs: int = 300,
-                   train_patience: int = 10,
-                   test_patience: int = None,
-                   save_model: bool = False
-                   ) -> None:
-        """
-        Train vega for the provided data.
-        :param adata: scRNA-seq data
-        :return: Nothing to return. The learned weights are kept in the adata.
-        """
-        reactome_dict = _load_reactome_gmt(reactome_gmt)
-        print("Total pathways used in the model {}".format(len(reactome_dict)))
-        mask = vega.utils.create_pathway_mask(feature_list=adata.var.index.tolist(),
-                                              dict_pathway=reactome_dict,
-                                              add_missing=n_unannotated,
-                                              fully_connected=fully_connected)
-        model = vega.VEGA(mask,
-                          dropout=dropout,
-                          beta=beta,
-                          positive_decoder=positive_decoder)
-        train_loader = vega.utils.prepare_anndata(adata,
-                                                  batch_size=batch_size,
-                                                  shuffle=shuffle)
-        epoch_history = model.train_model(train_loader,
-                                          learning_rate=learning_rate,
-                                          n_epochs=n_epochs,
-                                          train_patience=train_patience,
-                                          test_patience=test_patience,
-                                          save_model=save_model)
-        # Keep the training results as a customized data in adata
-        x_tensor = None
-        if sparse.issparse(adata.X):
-            x_tensor = torch.tensor(adata.X.A)
-        else:
-            x_tensor = torch.tensor(adata.X)
-        latent_results = model.to_latent(x_tensor)
-        vega_results = latent_results.detach().numpy()
-        vega_results_df = pd.DataFrame(vega_results)
-        vega_results_df.index = adata.obs.index
-        # Need to create the column names
-        col_names = list(reactome_dict.keys())
-        col_names += ["Missing_Node_{}".format(i) for i in np.arange(n_unannotated)]
-        vega_results_df.columns = col_names
-        adata.obsm[self.adata_key] = vega_results_df
-        # Need to keep the pathway list
-        self.adata = adata # Make sure this is called before the next statement
 
 
 class ReactomeSSGSEA(SingleSampleGSEA):
@@ -544,20 +502,6 @@ def reactome_ssgsea(adata: Union[AnnData, str],
     gsea_wrapper = GSEAPyWrapper()
     gsea_wrapper.ssgsea(adata, reactome_gmt, data_key)
     return gsea_wrapper
-
-
-def reactome_vega(adata: Union[AnnData, str],
-                  reactome_gmt: Union[dict, str],
-                  n_epochs: int = 300) -> PathwayAnalyzer:
-    """
-    Perform vega train based on Reactome pathways.
-    :param adata:
-    :param reactome_gmt:
-    :return:
-    """
-    vega_wrapper = VegaWrapper()
-    vega_wrapper.train_vega(adata, reactome_gmt, n_epochs=n_epochs)
-    return vega_wrapper
 
 
 def reactome_aucell(adata: Union[AnnData, str],

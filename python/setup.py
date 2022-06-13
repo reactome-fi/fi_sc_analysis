@@ -28,7 +28,10 @@ setup(
         'scikit-learn>=0.23.1',  # 0.23 may still be unstable
         'leidenalg>=0.8.1',
         'umap_learn>=0.4.6',
-        'magic_impute>=2.0.3'
+        'magic_impute>=2.0.3',
+        'pyscenic==0.11.2',
+        'gseapy==0.10.4',
+        'joblib==0.16.0'
     ],
     extras_require={
         'pandas': ['pandas>=1.0.5'],
