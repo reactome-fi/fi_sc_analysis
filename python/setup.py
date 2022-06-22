@@ -18,7 +18,7 @@ setup(
     license='Apache',
     packages=find_packages(),
     install_requires=[
-        'numpy==1.17.0', # tensorflow version dependency
+        'numpy==1.22.0', # tensorflow version dependency
         'scipy==1.4.1',  # tensorflow version dependency
         'tensorflow>=2.3.0',
         'keras>=2.4.3',
