@@ -1,6 +1,6 @@
 #### Note
 
-This Python package is used to **build regulatory networks** composed of both transcription factors and pathways in Reactome. The actual Python code used to build regulatory networks is hosted at [https://github.com/reactome-fi/sc_regulatory_network](https://github.com/reactome-fi/sc_regulatory_network "sc_regulatory_network"). 
+This Python package is used to help **building regulatory networks** composed of both transcription factors and pathways in Reactome. The actual Python code used to build regulatory networks is hosted at [https://github.com/reactome-fi/sc_regulatory_network](https://github.com/reactome-fi/sc_regulatory_network "sc_regulatory_network"). 
 
 #### Installation 
 
@@ -10,7 +10,7 @@ This Python package is used to **build regulatory networks** composed of both tr
    git clone https://github.com/reactome-fi/fi_sc_analysis
    cd python
    pip install .
-    ```
+   ```
 - You may install our released version by simply running the following:
 
 ```
