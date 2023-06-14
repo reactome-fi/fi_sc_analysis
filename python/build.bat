@@ -13,7 +13,7 @@ pip install . --target=dist_win
 REM Build the bundles. Make sure the main method should be entered like this.
 ECHO Build the bundle...
 REM This command is a little bit different from the .sh version: no -o  is set.
-shiv --site-packages dist_win --compressed -o scpy4reactome_win.pyz -e scpy4reactome.ScJSONServer:main
+shiv --site-packages dist_win --compressed -o scpy4reactome_win.pyz -e scpy4reactome.sc_json_server:main
 
 REM To run the package use. Make sure python version is 3.7.0.
 REM python scpy4reactome_win.pyz
