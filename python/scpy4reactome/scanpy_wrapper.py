@@ -25,8 +25,12 @@ import pandas as pd
 import scvelo as scv
 
 # As suggested in the tutorial by scanpy doc: Preprocessing and clustering 3k PBMCs
-sc.settings.verbosity = 3
-sc.logging.print_versions()
+# 3 for info and hints
+#sc.settings.verbosity = 3
+# Versions for all modules used by scanpy
+#sc.logging.print_versions()
+# scanpy version only
+#sc.logging.print_version_and_date()
 # To use scvelo's setting below
 #sc.set_figure_params(dpi = 80, facecolor = 'white')
 
@@ -41,7 +45,6 @@ regressout_uns_key_name = 'regressout_keys'
 imputation_uns_key_name = 'imputation'
 # 250 is a good number for pathway and network analysis. So far hard-code it.
 n_rank_genes = 250
-
 # Global level flags to control the use of the serve
 # server = SimpleJSONRPCServer("localhost")
 # isWaiting = True
@@ -124,11 +127,20 @@ def scv_velocity(adata,
     sc.tl.umap(adata, init_pos='paga', random_state=random_state) # We don't have positions for paga yet
     adata.uns['paga']['pos'] = _reset_paga_pos(adata)
 
-def open_10_genomics_data(dir) :
+def open_10_genomics_data(dir,
+                          method = 'read_10x_mtx') :
     """
         Open a 10x genomics data into an annadata object.
     """
-    adata = sc.read_10x_mtx(dir, var_names='gene_symbols', cache=True)
+    adata = None
+    if method == 'read_10x_mtx' :
+        adata = sc.read_10x_mtx(dir, var_names='gene_symbols', cache=True)
+    elif method == 'read_h5ad' :
+        adata = sc.read_h5ad(dir)
+    elif method == 'read_visium' :
+        adata = sc.read_visium(dir)
+    else:
+        raise ValueError('{} is not supported yet.'.format(method))
     adata.var_names_make_unique()
     return adata
 
@@ -176,7 +188,7 @@ def preprocess(adata, copy=False, need_scale=True, regressout_keys = None, imput
             adata.X -= min_value
         # Mark for imputation
         adata.uns[imputation_uns_key_name] = {"method": "magic", "solver": solver, "min_value": min_value}
-    adata.raw = adata # We will use imputated as row if imputation is done.
+    adata.raw = adata # We will use imputated as raw if imputation is done.
     # Mark genes with highly_variable flag
     # Default parameters are used in this function call.
     sc.pp.highly_variable_genes(adata)
@@ -319,15 +331,18 @@ def dpt(adata: AnnData,
 
 def project(new_dir_name: str,
             adata_ref: AnnData,
+            method: str,
             scv: bool = False,
             batch_categories: Optional[str] = None,
-)->AnnData:
+            )->AnnData:
     """
     This function is used to project adata to adata_ref using ingest function in scanpy. The procedures here are based
     on the tutorial: integration-data-using-inject. Both adata ad adata_ref should have been preprocessed by running the
     preprocess function but with need_scale false.
     :param new_dir_name: the data directory to be projected
     :param adata_ref: the reference data
+    :param method: The file format used for the new data file. The use of this parameter is the same as
+    open_10_genomics_data.
     :param scv: true for scv-based RNA velocity analysis
     :param batch_categories: the name for the reference should be the first element
     :return: return a merged AnnData object with two originally data copied and merged.
@@ -340,7 +355,7 @@ def project(new_dir_name: str,
         adata = scv_open(new_dir_name)
         scv_preprocess(adata)
     else :
-        adata = open_10_genomics_data(new_dir_name)
+        adata = open_10_genomics_data(new_dir_name, method)
         # Make sure we do the same thing as in the original data. But we don't want to keep the original data
         adata = preprocess(adata, copy=False, need_scale=False)
         # Check if we need to do permutation
@@ -355,11 +370,12 @@ def project(new_dir_name: str,
     # slicing the data to make copies
     adata = adata[:, shared_var_names]
     if not scv :
-        # Call regress here so that we have almost the same number of genes selected by the adata_ref (aka highly invariable genes)
+        # Call regress here so that we have almost the same number of genes selected by the adata_ref (aka highly
+        # invariable genes)
         regressout_key = None
         if regressout_uns_key_name in adata.uns_keys() :
             regressout_key = adata.uns[regressout_uns_key_name]
-            sc.logging.info("Find regressout_keys for projecting: ", str(regressout_key))
+            sc.logging.info("Find regressout_keys for projecting: {}".format(regressout_key))
         regress(adata, keys = regressout_key)
     adata_ref = adata_ref[:, shared_var_names]
     # inject based on the leiden

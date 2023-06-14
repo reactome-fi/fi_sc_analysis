@@ -14,7 +14,7 @@
 
 - ipython: conda install -c conda-forge ipython, version 7.16.1, for better python development
 
-- Scribe-py: Used to calculate restricted directed mutual information to infer causality between TFs and targets. Install by /Users/wug/miniconda3/envs/scanpy/bin/pip install git+https://github.com/aristoteleo/Scribe-py.git (August 26, 2020 snapshot).
+- Scribe-py: Used to calculate restricted directed mutual information to infer causality between TFs and targets. Install by /Users/wug/miniconda3/envs/scanpy/bin/pip install git+https://github.com/aristoteleo/Scribe-py.git (August 26, 2020 snapshot). Currently the usage is disabled for performance reason.
 
 We use shiv to create a bundled package containing all dependencies for deployment. Shiv can be installed based on https://shiv.readthedocs.io/en/latest/index.html. To create the package, following the following two steps:
 
