@@ -19,17 +19,20 @@ setup(
     install_requires=[
         # It will be much nicer to use the exact versions to avoid any compatibility issue.
         'jsonrpclib-pelix>=0.4.1',
-        'scanpy==1.5.1', # Fix to this version since it is used for development
+        # Pick whatever is the latest version
+        # 'scanpy>=1.9.8', # Fix to this version since it is used for development
         'networkx>=2.4',
-        'scvelo>=0.2.2',
-        'matplotlib==3.1.2', # See this https://stackoverflow.com/questions/24251102/from-matplotlib-import-ft2font-importerror-dll-load-failed-the-specified-pro
-        'tables==3.5.2',# Make sure this version is used. Otherwise, there is a dll cannot find error under windows.
+        # 'scvelo>=0.2.2',
+        # Most likely 3.6.0 will work
+        'matplotlib>=3.6.0', # See this https://stackoverflow.com/questions/24251102/from-matplotlib-import-ft2font-importerror-dll-load-failed-the-specified-pro
+        # Use >= under mac to solve h5d issue
+        # 'tables>=3.5.2',# Make sure this version is used. Otherwise, there is a dll cannot find error under windows.
         'python-igraph>=0.8.2',
-        'scikit-learn>=0.23.1',  # 0.23 may still be unstable
+        # 'scikit-learn>=1.4.0',  
         'leidenalg>=0.8.1',
-        'umap_learn>=0.4.6',
-        'magic_impute>=2.0.3',
-        'pyscenic==0.11.2',
+        # 'umap_learn==0.5.1', # This version works with scanpy 1.9.1 and python 3.10
+        # 'magic_impute>=2.0.3',
+        # 'pyscenic>=0.12.1',
         'gseapy==0.10.4',
         'joblib==0.16.0'
     ],
