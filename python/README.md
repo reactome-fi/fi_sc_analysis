@@ -11,6 +11,16 @@ This Python package is used to help **building regulatory networks** composed of
    cd python
    pip install .
    ```
+
+**If you have a difficult to install it, following the following steps after creating an conda env:**
+
+1. pip install scanpy
+2. pip install pyscenic
+3. pip install scvelo
+4. pip install .
+
+**Note: The setup.py has been updated for the above procedures**
+
 - You may install our released version by simply running the following:
 
 ```
