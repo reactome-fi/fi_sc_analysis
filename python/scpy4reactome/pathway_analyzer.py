@@ -1,5 +1,5 @@
 """
-This package is used to do pathway enrichment analysis by adoptiong ccommonly used algorithms.
+This package is used to do pathway enrichment analysis by adoptiong commonly used algorithms.
 """
 import cProfile
 import os
@@ -13,6 +13,7 @@ import pandas as pd
 import scanpy as sc
 import statsmodels.api as sm
 import statsmodels.stats.multitest
+from statsmodels.stats.multitest import fdrcorrection
 from anndata import AnnData
 from gseapy.gsea import SingleSampleGSEA
 from joblib import Parallel, delayed
@@ -20,12 +21,17 @@ from pyscenic import aucell
 from pyscenic.genesig import GeneSignature
 from seaborn import clustermap
 from statsmodels.formula.api import ols
+from scipy.stats import mannwhitneyu
+import plotly.express as px
+
 
 # Pathway analysis keys
 SSGSEA_KEY = "X_ssgsea"
 AUCELL_KEY = "X_aucell"
 TF_SSGSEA_KEY = "X_tf_ssgsea"
 TF_AUCELL_KEY = "X_tf_aucell"
+LIGAND_SSGSEA_KEY = "X_ligand_ssgsea"
+LIGAND_AUCELL_KEY = "X_ligand_aucell"
 
 def _load_data(adata: Union[AnnData, str],
                need_transpose: bool = True):
@@ -39,7 +45,8 @@ def _load_data(adata: Union[AnnData, str],
         adata = sc.read_h5ad(adata)
     if isinstance(adata, AnnData):
         # Convert the adata into a DataFrame
-        adata_df = adata.to_df()  # Use the expression matrix and make sure genes for rows and cells for cols
+        # Use the expression matrix and make sure genes for rows and cells for cols
+        adata_df = adata.to_df()
         if need_transpose:
             adata_df = adata_df.T
     elif isinstance(adata, pd.DataFrame):
@@ -61,7 +68,8 @@ def _load_reactome_gmt(reactome_gmt: Union[dict, str]):
     elif os.path.isfile(reactome_gmt):
         genesets_dict = _read_reactome_gmt(reactome_gmt)
     else:
-        raise Exception("Error in parsing reactome_gmt: Need a dict or file name.")
+        raise Exception(
+            "Error in parsing reactome_gmt: Need a dict or file name.")
     return genesets_dict
 
 
@@ -106,7 +114,8 @@ class PathwayAnalyzer(object):
         :param pathway_scores:
         :return:
         """
-        rtn = (pathway_scores - pathway_scores.min()) / (pathway_scores.max() - pathway_scores.min())
+        rtn = (pathway_scores - pathway_scores.min()) / \
+            (pathway_scores.max() - pathway_scores.min())
         return rtn
 
     def perform_pathway_anova(self,
@@ -119,7 +128,8 @@ class PathwayAnalyzer(object):
         pathways_activities = self._get_pathway_activities()
         pathways_list = list(pathways_activities.columns)
         if cluster_key not in self.adata.obs.keys():
-            raise Exception("{} is not in obs. Do a clustering first.".format(cluster_key))
+            raise Exception(
+                "{} is not in obs. Do a clustering first.".format(cluster_key))
         cell_clusters = self.adata.obs[cluster_key]
         # Do annova for each pathway
         results_dict = {}
@@ -143,7 +153,8 @@ class PathwayAnalyzer(object):
         result_df.sort_values(by=['PR(>F)', "F"], inplace=True)
         # Do a multiple test correction
         adjust_method = "fdr_bh"
-        adjusted_p_values = statsmodels.stats.multitest.multipletests(result_df['PR(>F)'], method=adjust_method)
+        adjusted_p_values = statsmodels.stats.multitest.multipletests(
+            result_df['PR(>F)'], method=adjust_method)
         result_df[adjust_method] = adjusted_p_values[1]
         return result_df
 
@@ -158,7 +169,8 @@ class PathwayAnalyzer(object):
         pathways_activities = self.adata.obsm[self.adata_key]
         if isinstance(pathways_activities, pd.DataFrame):
             return pathways_activities
-        raise Exception("{} for pathways_activities is not supported".format(type(pathways_activities)))
+        raise Exception("{} for pathways_activities is not supported".format(
+            type(pathways_activities)))
 
     def get_pathway_score(self,
                           pathway: str
@@ -173,7 +185,7 @@ class PathwayAnalyzer(object):
         return self._get_pathway_activities().loc[:, pathway]
 
     def color_pathway_umap(self,
-                           pathways: list or str,
+                           pathways: list | str,
                            color_cluster: bool = True,
                            obs_name_prefix: str = ''
                            ) -> None:
@@ -193,7 +205,8 @@ class PathwayAnalyzer(object):
         pathway_list = list(pathway_activities.columns)
         color_names = []
         for pathway in pathways:
-            pathway_index = pathway_list.index(pathway)  # Get the first pathway index. There should be one only.
+            # Get the first pathway index. There should be one only.
+            pathway_index = pathway_list.index(pathway)
             pathway_score = pathway_activities.iloc[:, pathway_index]
             # Need to register it into the observation for plot
             key_name = obs_name_prefix + pathway
@@ -202,6 +215,108 @@ class PathwayAnalyzer(object):
         if color_cluster:
             color_names.append("leiden")
         sc.pl.umap(self.adata, color=color_names)
+
+    def perform_diff_activity_analysis(self,
+                                       group: Union[str, list],
+                                       ref_group: Union[str, list],
+                                       obs_key: str,
+                                       need_diff: bool = False) -> pd.DataFrame:
+        """
+        Perform a differential analysis between two samples for gene expression, pathway score or
+        TF score. The current implementation uses Mann-Whitney U Test (https://machinelearningmastery.com
+        /nonparametric-statistical-significance-tests-in-python/)
+        :param adata:
+        :param group: the target samples
+        :param ref_group: the reference samples
+        :param obs_key: the key in obs to get cells for group and ref_group
+        :param need_diff: calculate median difference if true between two groups
+        :return:
+        """
+        if obs_key not in self.adata.obs_keys():
+            raise ValueError('{}} is not in adata.obs.'.format(obs_key))
+        if isinstance(group, str):
+            group = [group]
+        if isinstance(ref_group, str):
+            ref_group = [ref_group]
+        
+        # Get cells for the two groups
+        cells_in_group = self.adata.obs_names[self.adata.obs[obs_key].isin(group)]
+        cells_in_ref_group = self.adata.obs_names[self.adata.obs[obs_key].isin(ref_group)]
+
+        # DataFrame to hold the results
+        cols = ['feature', 'stat', 'p-value']
+        if need_diff:
+            cols.append('median_diff')
+            cols.append('mean_diff')
+        result_df = pd.DataFrame(columns=cols)
+        features = self.adata.obsm[self.adata_key]
+        row = 0
+        for feature in features:
+            scores = self.adata.obsm[self.adata_key][feature]
+            scores_group = scores.loc[cells_in_group]
+            scores_ref_group = scores.loc[cells_in_ref_group]
+            try:
+                test_result = mannwhitneyu(scores_group, scores_ref_group)
+                row_values = [feature, test_result[0], test_result[1]]
+                if need_diff:
+                    row_values.append(np.median(scores_group) - np.median(scores_ref_group))
+                    row_values.append(np.mean(scores_group) - np.mean(scores_ref_group))
+                result_df.loc[row] = row_values
+                row += 1
+            except ValueError as e:
+                print("{}: {}.".format(feature, e)) #TODO: Need to change this to logging!
+        # Add a fdr correction
+        # Should get the second returned value
+        result_df['fdr'] = fdrcorrection(result_df['p-value'])[1]
+        # Sort the final result based on fdr
+        result_df.sort_values(by='fdr', inplace=True)
+        result_df.reset_index(inplace=True, drop=True)
+        return result_df
+    
+
+    def scatter_plot_pathways(self,
+                              pathway_df: pd.DataFrame,
+                              feature_col: str = None,
+                              title: str = None,
+                              show: bool = True):
+        """
+        Put pathways in a scatter plot based on top level pathways.
+        The code here is based on
+        :param pathway_df: the data frame
+        :param feature_col: none for using -Log10(FDR).
+        :return:
+        """
+        pathway_hr_file = '../resources/Pathway_List_In_Hirerarchy_Release_79.txt'
+        pathway_hr_df = pd.read_csv(pathway_hr_file, sep='\t')
+        # Exclude disease pathways
+        disease_pathways = pathway_hr_df['Top_Level_Pathway'] == 'Disease'
+        pathway_hr_df = pathway_hr_df[~disease_pathways]
+        # Apparently the order is not right there
+        pathway_hr_df = pathway_hr_df.iloc[::-1]
+        pathway_hr_df = pathway_hr_df.merge(
+            pathway_df, how='left', left_on='Pathway', right_on='feature')
+        if feature_col is None:
+            feature_col = self._add_log10_fdr_col(pathway_hr_df)
+        fig = px.scatter(pathway_hr_df,
+                         x='Pathway',
+                         y=feature_col,
+                         title=title,
+                         color='Top_Level_Pathway')
+        fig.update_xaxes(showticklabels=False)
+        if show:
+            fig.show()
+        return fig
+    
+    def _add_log10_fdr_col(self, df: pd.DataFrame):
+        feature_col = '-Log10(FDR)'
+        # Need to avoid log(0)
+        fdr = df['fdr']
+        fdr_min = min(fdr[fdr > 0])
+        # print(fdr_min)
+        # df[feature_col] = df['fdr'].map(
+        #     lambda fdr: -np.log10(fdr) if fdr > fdr_min else (np.NAN if np.isnan(fdr) else -np.log10(fdr_min / 10)))
+        df[feature_col] = df['fdr'].map(lambda fdr : -np.log10(fdr))
+        return feature_col
 
 
 class ReactomeSSGSEA(SingleSampleGSEA):
@@ -213,14 +328,15 @@ class ReactomeSSGSEA(SingleSampleGSEA):
     author, Dr. Zhuoqing Fang, has the copyright to the original code. The license of the original code is
     BSD 3-Clause "New" or "Revised" License: https://github.com/zqfang/GSEApy/blob/master/LICENSE.
     """
+
     def __init__(self, data, gene_sets, sample_norm_method='rank',
                  min_size=15, max_size=2000, permutation_num=0, weighted_score_type=0.25,
-                 scale=True, ascending=False, processes=1, figsize=(7,6), format='pdf',
+                 scale=True, ascending=False, processes=1, figsize=(7, 6), format='pdf',
                  graph_num=20, no_plot=True, seed=None, verbose=False):
         super(ReactomeSSGSEA, self).__init__(data, gene_sets, outdir="GSEA_SingleSample", sample_norm_method='rank',
-                 min_size=15, max_size=2000, permutation_num=0, weighted_score_type=0.25,
-                 scale=True, ascending=False, processes=1, figsize=(7,6), format='pdf',
-                 graph_num=20, no_plot=True, seed=None, verbose=False)
+                                             min_size=15, max_size=2000, permutation_num=0, weighted_score_type=0.25,
+                                             scale=True, ascending=False, processes=1, figsize=(7, 6), format='pdf',
+                                             graph_num=20, no_plot=True, seed=None, verbose=False)
 
     def load_gmt(self,
                  gene_list: pd.Index,
@@ -247,15 +363,16 @@ class ReactomeSSGSEA(SingleSampleGSEA):
             # tag_indicator = np.in1d(gene_list, subset_list, assume_unique=True)
             tag_indicator = gene_list.isin(subset_list)
             tag_len = tag_indicator.sum()
-            if self.min_size <= tag_len <= self.max_size: continue
+            if self.min_size <= tag_len <= self.max_size:
+                continue
             del genesets_dict[subset]
 
         filsets_num = len(subsets) - len(genesets_dict)
         self._logger.info("%04d gene_sets have been filtered out when max_size=%s and min_size=%s" % (
-        filsets_num, self.max_size, self.min_size))
+            filsets_num, self.max_size, self.min_size))
 
         if filsets_num == len(subsets):
-            self._logger.error("No gene sets passed through filtering condition!!!, try new parameters again!\n" + \
+            self._logger.error("No gene sets passed through filtering condition!!!, try new parameters again!\n" +
                                "Note: check gene name, gmt file format, or filtering size.")
             raise Exception("No gene sets passed through filtering condition")
 
@@ -294,7 +411,8 @@ class ReactomeSSGSEA(SingleSampleGSEA):
         elif weighted_score_type > 0:
             pass
         else:
-            raise ValueError("Using negative values of weighted_score_type, not allowed.")
+            raise ValueError(
+                "Using negative values of weighted_score_type, not allowed.")
 
         cor_mat = np.abs(cor_mat)
         # Used for ssGSEA only
@@ -308,44 +426,53 @@ class ReactomeSSGSEA(SingleSampleGSEA):
         # It is very slow to use np.in1d. Use the index.isin instead for quick performance.
         # tag_indicator = np.vstack([np.in1d(gene_mat, gene_sets[key], assume_unique=True) for key in keys])
         # Only this line is changed. All others are the same as the original code but focusing on ssgsea only.
-        tag_indicator = np.vstack([data.index.isin(gene_sets[key]) for key in keys])
+        tag_indicator = np.vstack(
+            [data.index.isin(gene_sets[key]) for key in keys])
         tag_indicator = tag_indicator.astype(int)
         # index of hits
         hit_ind = [np.flatnonzero(tag).tolist() for tag in tag_indicator]
         # generate permutated hits matrix
         nperm = 0  # For ssgsea
-        perm_tag_tensor = np.repeat(tag_indicator, nperm + 1).reshape((M, N, nperm + 1))
+        perm_tag_tensor = np.repeat(
+            tag_indicator, nperm + 1).reshape((M, N, nperm + 1))
         # missing hits
         no_tag_tensor = 1 - perm_tag_tensor
         # calculate numerator, denominator of each gene hits
-        rank_alpha = (perm_tag_tensor * cor_mat[np.newaxis, :, np.newaxis]) ** weighted_score_type
+        rank_alpha = (perm_tag_tensor *
+                      cor_mat[np.newaxis, :, np.newaxis]) ** weighted_score_type
 
         axis = 1
         P_GW_denominator = np.sum(rank_alpha, axis=axis, keepdims=True)
         P_NG_denominator = np.sum(no_tag_tensor, axis=axis, keepdims=True)
-        REStensor = np.cumsum(rank_alpha / P_GW_denominator - no_tag_tensor / P_NG_denominator, axis=axis)
+        REStensor = np.cumsum(rank_alpha / P_GW_denominator -
+                              no_tag_tensor / P_NG_denominator, axis=axis)
         # ssGSEA: scale es by gene numbers ?
         # https://gist.github.com/gaoce/39e0907146c752c127728ad74e123b33
-        if scale: REStensor = REStensor / len(gene_mat)
+        if scale:
+            REStensor = REStensor / len(gene_mat)
         # ssGSEA
         esmatrix = REStensor.sum(axis=axis)
-        es, esnull, RES = esmatrix[:, -1], esmatrix[:, :-1], REStensor[:, :, -1]
+        es, esnull, RES = esmatrix[:, -
+                                   1], esmatrix[:, :-1], REStensor[:, :, -1]
         return es, esnull, hit_ind, RES
 
     def run(self):
         """run entry"""
-        self._logger.info("Parsing data files for ssGSEA...........................")
+        self._logger.info(
+            "Parsing data files for ssGSEA...........................")
         # load data
         data = self.load_data()
         # normalized samples, and rank
         normdat = self.norm_samples(data)
         # filtering out gene sets and build gene sets dictionary
         gmt = self.load_gmt(gene_list=normdat.index, gmt=self.gene_sets)
-        self._logger.info("%04d gene_sets used for further statistical testing....."% len(gmt))
+        self._logger.info(
+            "%04d gene_sets used for further statistical testing....." % len(gmt))
         # set cpu numbers
         self._set_cores()
         # start analysis
-        self._logger.info("Start to run ssGSEA...Might take a while................")
+        self._logger.info(
+            "Start to run ssGSEA...Might take a while................")
         # ssGSEA without permutation
         self.runSamples(df=normdat, gmt=gmt)
 
@@ -384,16 +511,19 @@ class ReactomeSSGSEA(SingleSampleGSEA):
         # save results
         for i, temp in enumerate(tempes):
             name = names[i]  # cell id
-            self._logger.debug("Calculate Enrichment Score for Sample: %s " % name)
+            self._logger.debug(
+                "Calculate Enrichment Score for Sample: %s " % name)
             es, esnull, hit_ind, RES = temp
             # save results
-            self.resultsOnSamples[name] = pd.Series(data=es, index=subsets, name=name)
+            self.resultsOnSamples[name] = pd.Series(
+                data=es, index=subsets, name=name)
 
 
 class GSEAPyWrapper(PathwayAnalyzer):
     """
     A wrapper of GSEAPY for doing ssgsea pathway analysis: https://gseapy.readthedocs.io/en/latest/index.html
     """
+
     def __init__(self):
         super().__init__()
         self.adata_key = SSGSEA_KEY
@@ -433,7 +563,8 @@ class GSEAPyWrapper(PathwayAnalyzer):
         #                outdir=None)  # Don't want to keep the output directory
         # Keep the raw enrichment scores
         if isinstance(adata, AnnData):
-            adata.obsm[self.adata_key] = pd.DataFrame(ss.resultsOnSamples).T  # Need to revert it backs
+            adata.obsm[self.adata_key] = pd.DataFrame(
+                ss.resultsOnSamples).T  # Need to revert it backs
             self.adata = adata
         else:
             return pd.DataFrame(ss.resultsOnSamples)
@@ -443,6 +574,7 @@ class AUCellWrapper(PathwayAnalyzer):
     """
     The wrapper for doing AUCell based pathway analysis based on pyScenic: https://pyscenic.readthedocs.io/en/latest/
     """
+
     def __init__(self):
         super(AUCellWrapper, self).__init__()
         self.adata_key = AUCELL_KEY
@@ -451,7 +583,8 @@ class AUCellWrapper(PathwayAnalyzer):
                adata: Union[AnnData, str],
                reactome_gmt: Union[OrderedDict, str],
                data_key: str,
-               filter_with_max_score: float = 0.0001, # Default filter to avoid generating too many zeros.
+               # Default filter to avoid generating too many zeros.
+               filter_with_max_score: float = 0.0001,
                need_plot: bool = False,
                need_scale: bool = True
                ) -> Optional[pd.DataFrame]:
@@ -470,20 +603,25 @@ class AUCellWrapper(PathwayAnalyzer):
         adata, adata_df = _load_data(adata, need_transpose=False)
         genesets_dict = _load_reactome_gmt(reactome_gmt)
         # Need to convert genesets_dict to list of GeneSignatures
-        gene_signatures = [GeneSignature(name=name, gene2weight=genes) for name, genes in genesets_dict.items()]
+        gene_signatures = [GeneSignature(
+            name=name, gene2weight=genes) for name, genes in genesets_dict.items()]
         # Get the percentiles for genes that should be used
         percentiles = aucell.derive_auc_threshold(adata_df)
         # Choose top 5 percentiles genes. This may need to be parameterized.
-        aucs_matrix = aucell.aucell(adata_df, gene_signatures, percentiles[0.05])
-        if filter_with_max_score is not None: # Do a filtering
-            info("The size of aucx_matrix before filtering: {}".format(aucs_matrix.shape))
+        aucs_matrix = aucell.aucell(
+            adata_df, gene_signatures, percentiles[0.05])
+        if filter_with_max_score is not None:  # Do a filtering
+            info("The size of aucx_matrix before filtering: {}".format(
+                aucs_matrix.shape))
             aucs_matrix = aucs_matrix.loc[:,
-                          [col for col in aucs_matrix.columns if aucs_matrix.loc[:, col].max() > filter_with_max_score]]
-            info("The size of aucx_matrix after filtering: {}".format(aucs_matrix.shape))
+                                          [col for col in aucs_matrix.columns if aucs_matrix.loc[:, col].max() > filter_with_max_score]]
+            info("The size of aucx_matrix after filtering: {}".format(
+                aucs_matrix.shape))
         if need_scale:
             aucs_matrix = super().scale_pathways(aucs_matrix)
         if need_plot:
-            clustermap(aucs_matrix, figsize=(14, 14)) # Give a larger figure size
+            # Give a larger figure size
+            clustermap(aucs_matrix, figsize=(14, 14))
         # Store the information
         adata.obsm[self.adata_key] = aucs_matrix
         self.adata = adata
@@ -507,7 +645,7 @@ def reactome_ssgsea(adata: Union[AnnData, str],
 def reactome_aucell(adata: Union[AnnData, str],
                     reactome_gmt: Union[dict, str],
                     data_key: str = AUCELL_KEY,
-                    filter_with_max_score: float = 1.0E-4, # Default with 0.0001
+                    filter_with_max_score: float = 1.0E-4,  # Default with 0.0001
                     need_plot: bool = False) -> PathwayAnalyzer:
     """
     Perform aucell-based pathway analysis for Reactome pathways.
@@ -521,7 +659,7 @@ def reactome_aucell(adata: Union[AnnData, str],
     return aucell_wrapper
 
 
-def fetch_analyzed_pathway_keys(adata : AnnData) -> List[str]:
+def fetch_analyzed_pathway_keys(adata: AnnData) -> List[str]:
     """
     Get the keys for analyzed pathway activities.
     :param adata:
@@ -537,7 +675,8 @@ def fetch_analyzed_pathway_keys(adata : AnnData) -> List[str]:
 
 def fetch_cluster_pathway_activities(adata: AnnData,
                                      cluster: str,
-                                     pathway_activity_key: str = [SSGSEA_KEY, AUCELL_KEY],
+                                     pathway_activity_key: str = [
+                                         SSGSEA_KEY, AUCELL_KEY],
                                      cluster_key: str = "leiden") -> pd.Series:
     """
     Fetch the median of pathway activities for a cluster
@@ -549,19 +688,21 @@ def fetch_cluster_pathway_activities(adata: AnnData,
     """
     # Make sure pathway has been analyzes
     if pathway_activity_key not in adata.obsm.keys():
-        raise ValueError("Cannot find key in adata.obsm for {}.".format(pathway_activity_key))
+        raise ValueError(
+            "Cannot find key in adata.obsm for {}.".format(pathway_activity_key))
     # Make sure cluster_key is in there
     if cluster_key not in adata.obs.keys():
         raise ValueError("Cannot find key in adata.obs for {}".format(cluster))
     # Get the cells
-    cell_cluster = adata.obs[cluster_key] == str(cluster) # Just in case cluster is an int
+    cell_cluster = adata.obs[cluster_key] == str(
+        cluster)  # Just in case cluster is an int
     cluster_pathways = adata.obsm[pathway_activity_key].loc[cell_cluster, :]
     cluster_pathway_median = cluster_pathways.median()
     return cluster_pathway_median
 
 
 def load_dorothea_data(file_name: str,
-                       confidence_levels: str = ['A','B']):
+                       confidence_levels: str = ['A', 'B']):
     """
     Load the Dorothea TF/target interactions data into a dict so that it can be used for
     pathway activities analysis.
@@ -585,13 +726,15 @@ def load_dorothea_data(file_name: str,
             continue
         if not tokens[0] in tf_genes.keys():
             tf_genes[tokens[0]] = []
-        tf_genes[tokens[0]].append(tokens[2]) # Don't care about the action mode
+        # Don't care about the action mode
+        tf_genes[tokens[0]].append(tokens[2])
     file.close()
     return tf_genes
 
 
 def test_reactome_ssgsea():
-    adata = sc.read_h5ad("/Users/wug/Documents/wgm/work/FIPlugIns/test_data/ScRNASeq/SavedResults/mouse/17_5_gfp.h5ad")
+    adata = sc.read_h5ad(
+        "/Users/wug/Documents/wgm/work/FIPlugIns/test_data/ScRNASeq/SavedResults/mouse/17_5_gfp.h5ad")
     # Just need the first 10 cells for this test
     adata = adata[:100, :]
     reactome_gmt = "../data/gmt/MouseReactomePathways_Rel_75_122220.gmt"
@@ -607,7 +750,8 @@ def test_reactome_ssgsea():
 
 
 def test_reactome_vega():
-    adata = sc.read_h5ad("/Users/wug/Documents/wgm/work/FIPlugIns/test_data/ScRNASeq/SavedResults/mouse/17_5_gfp.h5ad")
+    adata = sc.read_h5ad(
+        "/Users/wug/Documents/wgm/work/FIPlugIns/test_data/ScRNASeq/SavedResults/mouse/17_5_gfp.h5ad")
     reactome_gmt = "data/gmt/MouseReactomePathways_Rel_75_122220.gmt"
     return reactome_vega(adata, reactome_gmt, n_epochs=3)
 
