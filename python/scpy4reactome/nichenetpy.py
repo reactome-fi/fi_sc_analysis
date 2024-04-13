@@ -201,6 +201,7 @@ class NicheNetWrapper:
         if xlabelsize:
             clustermap.ax_heatmap.tick_params(axis='x', labelsize=8)
         return clustermap
+        
     
     def get_lr_network_top_df(self,
                               best_upstream_ligands: list,

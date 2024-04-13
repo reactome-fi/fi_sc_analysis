@@ -8,6 +8,7 @@ import pandas as pd
 import networkx as nx
 import numpy as np
 from collections import defaultdict
+import seaborn as sns
 
 
 def run_cellphonedb(counts_h5ad_file: str,  # Since CellPhoneDB needs the original file, we cannot pass a AnnData.
@@ -297,3 +298,43 @@ def load_mouse_genes_to_human_map(map_file_name: str = '../resources/HOM_MouseHu
         for mouse_gene in mouse_genes:
             mousegene2human[mouse_gene] = human_genes
     return mousegene2human
+
+
+def plot_ligand_src_clustermap(network_with_ligand: nx.DiGraph,
+                               cpdb_network: nx.DiGraph,
+                               focused_cluster: str | int,
+                               figsize = [16, 6]):
+    # To avoid the naming confusion between human genes and mouse genes
+    # we used all upper case for names
+    ligands_in_network = []
+    for node, data in network_with_ligand.nodes(data=True):
+        if 'type' in data and data['type'] == 'Ligand':
+            ligands_in_network.append(node.upper())
+    ligands_in_network.sort()
+    print('Total ligands in network: {}'.format(len(ligands_in_network)))
+
+    # Build a matrix for these ligands to show their original clusters
+    cluster_2_ligands = {}
+    for src, target, data in cpdb_network.edges(data=True):
+        if cpdb_network.nodes[target]['cluster'] is not str(focused_cluster):
+            continue
+        src_ligand = src.split(':')[1]
+        if not src_ligand.upper() in ligands_in_network:
+            continue
+        src_cluster = cpdb_network.nodes[src]['cluster']
+        if not src_cluster in cluster_2_ligands.keys():
+            src_list = np.repeat(0, len(ligands_in_network))
+            cluster_2_ligands[src_cluster] = src_list 
+        index = ligands_in_network.index(src_ligand.upper())
+        cluster_2_ligands[src_cluster][index] += data['score']
+
+    ligand_src_df = pd.DataFrame(columns=ligands_in_network, index=cluster_2_ligands.keys(), dtype=float)
+    for cluster in cluster_2_ligands.keys():
+        ligand_src_df.loc[cluster] = cluster_2_ligands[cluster]
+    
+    # Note the transformation
+    clustermap = sns.clustermap(data=ligand_src_df.T, figsize=figsize)
+    _ = clustermap.ax_heatmap.set_xlabel('Cluster')
+    _ = clustermap.ax_heatmap.set_ylabel('Ligand')
+
+    return clustermap
