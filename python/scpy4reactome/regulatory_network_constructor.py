@@ -17,6 +17,10 @@ import networkx as nx
 from scipy.stats import spearmanr
 import os
 import xml.etree.ElementTree as et
+import py4cytoscape as p4c
+import py4cytoscape.networks as pcn
+import py4cytoscape.styles as pcs
+from pathlib import Path
 
 
 def analyze_tf_pathway_correlations_via_spearman(adata: sc.AnnData,
@@ -836,3 +840,33 @@ def _load_pathway_hierarchy(elm, graph):
 def write_network_to_graphml(network: nx.DiGraph,
                              filename: str):
     nx.write_graphml(network, filename)
+
+
+
+def open_graphml_in_cytoscape(graphml_file: str,
+                              layout: str = None):
+    """Open a graphml network in Cytoscape desktop.
+    Note: It is possible to open a networkx graph directly in Cytoscape desktop. However, there
+    may be some bugs making applying visual styles very difficult (e.g. values, which should be
+    float, cannot be mapped as continuous values!). Therefore, we should this intermediate step.
+    Args:
+        graphml_file (str): _description_
+        layout (str, optional): _description_. Defaults to None.
+    """
+    style_file = '../resources/regulatory_network_cytoscape_style.xml'
+    # Check if the file is there
+    if not Path(style_file).exists():
+        raise ValueError('Cannot find style file. Export one from Cytoscape: {}'.format(style_file))
+    
+    style_name = 'reactome_regulatory_network'
+    pcn.import_network_from_file(graphml_file)
+    # Using a networkx graph has some kind data format issue for edges: color cannot be mapped from string
+    # value in float cannot be mapped continuously.
+    # pcn.create_network_from_networkx(network_with_ligand,
+    #                                 title='Network with ligands',
+    #                                 collection='Cluster {} networks'.format(focused_cluster))
+    if style_name not in p4c.get_visual_property_names():   
+        pcs.import_visual_styles(style_file)
+    p4c.set_visual_style(style_name)
+    if layout is not None:
+        p4c.layout_network(layout)
