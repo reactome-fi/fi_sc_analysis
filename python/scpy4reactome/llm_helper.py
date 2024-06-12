@@ -5,6 +5,41 @@ from langchain_core.runnables import RunnablePassthrough
 from pathlib import Path
 
 
+def get_evaluate_relatedness_prompt_template():
+    prompt_template = """
+You are an expert in biology and biomedicine. Evaluate the relatedness of the following text to the biological concept "{concept}." 
+Use a score between 0 and 10, with 10 indicating the highest degree of relatedness and 0 indicating no relatedness at all. Make sure
+the score is returned as the first line with the format like this: Score: 5\n\n.
+
+{text}
+"""
+    prompt = ChatPromptTemplate.from_template(prompt_template)
+    return prompt
+
+
+def evaluate_relatedness(concept: str,
+                         text: str,
+                         model: any) -> any:
+    llm_parameters = {
+        'concept': concept,
+        'text': text
+    }
+
+    prompt = get_evaluate_relatedness_prompt_template()
+    return invoke_llm(model, llm_parameters, prompt)
+
+
+def invoke_llm(model, llm_parameters, prompt):
+    answer = {
+        'answer': prompt | model 
+    }
+
+    dummy = RunnablePassthrough()
+    llm_chain = dummy | answer
+    result = llm_chain.invoke(llm_parameters)
+    return result
+
+
 def get_short_descrption_of_term_prompt_template():
     prompt_template = """
 You are an expert in biology and biomedicine. Write a short description about {term} with no more than {total_words} words. Focus on
@@ -23,14 +58,8 @@ def write_short_description_of_term(term: str,
     }
 
     desc_prompt = get_short_descrption_of_term_prompt_template()
-    answer = {
-        'answer': desc_prompt | model 
-    }
 
-    dummy = RunnablePassthrough()
-    llm_chain = dummy | answer
-    result = llm_chain.invoke(llm_parameters)
-    return result
+    return invoke_llm(model, llm_parameters, desc_prompt)
 
 
 def get_llm_summary_prompt_template():
@@ -69,14 +98,8 @@ def summarize_network_via_llm(network: nx.DiGraph,
     # Add a context about that this study is for
     llm_parameters['study_context'] = study_context
     network_summary_prompt = get_llm_summary_prompt_template()
-    answer = {
-        'answer': network_summary_prompt | model 
-    }
 
-    dummy = RunnablePassthrough()
-    llm_chain = dummy | answer
-    result = llm_chain.invoke(llm_parameters)
-    return result
+    return invoke_llm(model, llm_parameters, network_summary_prompt)
 
 
 def extract_information(network: nx.DiGraph | str) -> tuple[list, list, list, list]:
