@@ -1,6 +1,7 @@
 # This script contains functions that are used to contrustruct regulatory networks composed of TFs, pathways, and
 # ligands.
 
+from nichenetpy import NicheNetWrapper
 import scanpy as sc
 import pandas as pd
 import pathway_analyzer as pa
@@ -322,7 +323,7 @@ def simplify_network_for_tfs_pathways(network: nx.DiGraph,
             if len(tf_edges) == 0:
                 continue
             n_network.add_node(tf, type='TF', color='#99FFFF')
-            tf_edge_pathways = [v for u, v in tf_edges]
+            tf_edge_pathways = [v for u, v in tf_edges if v in pathways_in_network]
             # Get the original edges and make sure only one is added in the new network if multiple pathways are hit in
             # the same branch
             # For each pathway, get its ancestors and remove them from the list
@@ -699,7 +700,7 @@ def add_ligands_to_network_via_pathways(ligands: list,
     else:  # Use all pathways
         for node, data in network.nodes(data=True):
             node_type = data.get('type')
-            if node_type == "pathway":
+            if node_type == "Pathway":
                 target_pathways.add(node)
 
     # Since it is expected to see strong colinear relationships among ligands activities, caused by
@@ -743,7 +744,7 @@ def add_ligands_to_network_via_pathways(ligands: list,
             network.remove_node(ligand)
             continue
         for pathway in target_pathways:
-            # See if ther is an edge between this ligand and this pathway
+            # See if there is an edge between this ligand and this pathway
             if not network.has_edge(ligand, pathway):
                 continue
             # activation or inhibition
@@ -767,6 +768,91 @@ def add_ligands_to_network_via_pathways(ligands: list,
         write_network_to_graphml(network, graphml)
 
     return network, ligands_pathways_cor_df
+
+
+def add_ligands_to_network_via_tfs(ligands: list,
+                                   nichnet: NicheNetWrapper,
+                                   network: nx.DiGraph,
+                                   adata: sc.AnnData,
+                                   tf_file: str = '../resources/dorothea_hs.tsv',
+                                   dorothea_evidence: list = ['A', 'B', 'C', 'D', 'E'],
+                                   tf_key: str = pa.TF_AUCELL_KEY,
+                                   ligand_key: str = pa.LIGAND_AUCELL_KEY,
+                                   overlap_fdr_cutoff: float = 0.01,
+                                   cor_cutoff: float = 0.20,
+                                   cor_pvalue_cutoff: float = 0.001,
+                                   nichnet_weight_cutoff: float = 0.0001,
+                                   graphml: str = None) -> tuple[nx.DiGraph, pd.DataFrame]:
+    """Add ligands into a regulatory network composed of TFs and pathways.
+
+    Args:
+        ligands (list): a list of ligands to be added
+        network (nx.DiGraph): the target network
+        adata (sc.AnnData): the data source having all information to calculate correlation between pathways and ligands.
+        pathway_gmt_file (str): Reactome GMT file to be loaded for overlap analysis
+        ligand2targets (dict): Extract ligand's target for overlap analysis
+        overlap_pvalue_cutoff (float, optional): the cutoff p-value to add edge from ligand to pathway. Defaults to 0.01.
+        cor_cutoff (float, optional): the correlation cutoff from ligand to pathway from the GLM analysis. Defaults to 0.20.
+        cor_pvalue_cutoff (float, optional): this cutoff usually should not be used.
+        graphml (str, optional): the target file to export the network. Defaults to None.
+
+    Returns:
+        tuple[nx.DiGraph, pd.DataFrame]: the network with ligands added and the dataframe with the information used to add ligands to the network.
+        Note: The returned network is the same object of the network passed to this function.
+    """
+    tf2targets = pa.load_dorothea_data(file_name=tf_file, confidence_levels=dorothea_evidence)
+    # Need to figure out the target pathways in the network
+    target_tfs = set()
+    # Used to check if the edge linked to there is needed
+    for node, data in network.nodes(data=True):
+        node_type = data.get('type')
+        if node_type == "TF":
+            target_tfs.add(node)
+
+    ligands_tfs_cor_df = analyze_ligand_pathway_correlation_via_spearman(adata=adata,
+                                                                         target_pathways=target_tfs,
+                                                                         pathway_key=tf_key,
+                                                                         pathway2genes=tf2targets,
+                                                                         ligands=ligands,
+                                                                         ligand_key=ligand_key,
+                                                                         ligand2targets=nichnet.get_ligand_2_targets())
+    for ligand in ligands:
+        network.add_node(ligand, type='Ligand', color='#21D5F1')
+    # The results should be something like this:
+    #     	ligand	pathway	cor	cor_p_value	overlap_p_value
+    # 0	Nectin2	Signaling by Nuclear Receptors	0.489708	0.000000e+00	4.930094e-04
+    # 1	Dsc2	Signaling by Nuclear Receptors	0.462185	0.000000e+00	1.073196e-04
+    # We will check row by row
+    ligand2tfs = nichnet.get_ligand_2_tfs(weight_cutoff=nichnet_weight_cutoff)
+    for _, row in tqdm(ligands_tfs_cor_df.iterrows()):
+        cor = row['cor']
+        cor_pvalue = row['cor_p_value']
+        overlap_fdr = row['overlap_fdr']
+        if np.abs(cor) <= cor_cutoff or cor_pvalue >= cor_pvalue_cutoff or overlap_fdr >= overlap_fdr_cutoff:
+            continue  # Escape this row
+        # Have to make sure this tf is a target of this ligand
+        ligand = row['ligand']
+        tf = row['pathway']
+        # Add this relationship
+        if ligand not in ligand2tfs.keys() or tf not in ligand2tfs[ligand]:
+            continue # tf is not a direct ligand
+        color = '#86FF00' if cor > 0 else '#FF9600'
+        annotation = 'ligand_tf_activation' if cor > 0 else 'ligand_tf_inhibition'
+        network.add_edge(ligand, tf, color=color,
+                         value=np.abs(cor), annotation=annotation)  # value used for weight in pyviz
+
+    # If a pathway has an edge to a ligand, any edges having the same type to the ligand will be removed
+    # since semanatically we may be able to explain the observed relationship between this ligand to all
+    # pathways in the branch. The following code is used to do this clean-up using the directed edges
+    for ligand in ligands:
+        # Remove ligands that don't have any edges
+        if network.degree(ligand) == 0:
+            network.remove_node(ligand)
+
+    if graphml is not None:
+        write_network_to_graphml(network, graphml)
+
+    return network, ligands_tfs_cor_df
 
 
 def analyze_ligand_pathway_correlation_via_spearman(adata: sc.AnnData,
@@ -859,113 +945,15 @@ def open_graphml_in_cytoscape(graphml_file: str,
     if not Path(style_file).exists():
         raise ValueError('Cannot find style file. Export one from Cytoscape: {}'.format(style_file))
     
-    style_name = 'reactome_regulatory_network'
     pcn.import_network_from_file(graphml_file)
     # Using a networkx graph has some kind data format issue for edges: color cannot be mapped from string
     # value in float cannot be mapped continuously.
     # pcn.create_network_from_networkx(network_with_ligand,
     #                                 title='Network with ligands',
     #                                 collection='Cluster {} networks'.format(focused_cluster))
+    style_name = 'reactome_regulatory_network'
     if style_name not in p4c.get_visual_property_names():   
         pcs.import_visual_styles(style_file)
     p4c.set_visual_style(style_name)
     if layout is not None:
         p4c.layout_network(layout)
-
-
-def extract_information(network: nx.DiGraph | str) -> tuple[list, list, list, list]:
-    """Extract transcription factors, pathways, ligands, and their relationships from the network.
-
-    Args:
-        network (nx.DiGraph): _description_
-
-    Returns:
-        tuple[list, list, list, list]: four lists in the order of tfs, pathways, ligands and relationships.
-    """
-    # Need to load the network first if it is a file
-    if isinstance(network, str):
-        path = Path(network)
-        if not path.exists():
-            raise ValueError('No graphml file exists at: {}'.format(network))
-        network = nx.read_graphml(network)
-    tfs = []
-    pathways = []
-    ligands = []
-    fis = [] # functional relationships among nodes
-    for node, data in network.nodes(data=True):
-        type = data['type']
-        if type == 'TF':
-            tfs.append(node)
-        elif type == 'Pathway':
-            pathways.append(node)
-        elif type == 'Ligand':
-            ligands.append(node)
-        else:
-            raise ValueError('Unknown type: {}'.format(type))
-    
-    # Extract edge information
-    # Mapping action for different edge types
-    edge_annotation_actions = {
-        'ligand_pathway_activation': lambda _ : "activates",
-        'tf_pathway_inhibition': lambda _ : 'inhibits',
-        'tf_tf_activation': lambda _ : 'activates',
-        'tf_pathway_activation': lambda _ : 'activates',
-        'pathway_tf_annotation': lambda _ : 'regulates',
-        'pathway_pathway_hierarchy': lambda _ : 'is contained by',
-    }
-    for src, target, data in network.edges(data=True):
-        annotation = data['annotation']
-        edge_meaning = edge_annotation_actions[annotation]
-        if edge_meaning is None:
-            raise ValueError('No meaning defined for edge: {}'.format(annotation))
-        fi = '"{}" {} "{}"'.format(src, edge_meaning(annotation), target) # The second element calls the function
-        fis.append(fi)
-
-    return tfs, pathways, ligands, fis
-
-
-def get_llm_summary_prompt_template():
-    network_summary_prompt_template = """
-You are an expert in the field of {study_context}. Relying on the provided lists for reference, use your domain knowledge and write 
-some paragraphs in a scholar way to highlight the most important pathways and their functional relationships with transcription 
-factors and ligands with no more than {total_words} words. Be specific and don't speculate!
-
-transcription factors: {transcriptaion_factors}
-
-pathways: {pathways}
-
-ligands: {ligands}
-
-functional relationships: {functional_relationships}
-
-"""
-    network_summary_prompt = ChatPromptTemplate.from_template(network_summary_prompt_template)
-    return network_summary_prompt
-
-
-def summarize_network_via_llm(network: nx.DiGraph,
-                              study_context: str,
-                              model: any,
-                              total_words: int = 500) -> any:
-    tfs, pathways, ligands, fis = extract_information(network)
-    # print('TFs: {}\nPathways: {}\nLigands: {}\nFIs: {}'.format(tfs, pathways, ligands, fis))
-    llm_parameters = {
-        'transcriptaion_factors': ';'.join(tfs),
-        'pathways': ';'.join(pathways),
-        'ligands': ';'.join(ligands),
-        'functional_relationships': ';'.join(fis),
-        'total_words': total_words
-    }
-
-    # Add a context about that this study is for
-    llm_parameters['study_context'] = study_context
-    network_summary_prompt = get_llm_summary_prompt_template()
-    answer = {
-        'answer': network_summary_prompt | model 
-    }
-
-    dummy = RunnablePassthrough()
-    llm_chain = dummy | answer
-    result = llm_chain.invoke(llm_parameters)
-    return result
-

@@ -74,15 +74,9 @@ class NicheNetWrapper:
             pd_from_r_df = conversion.get_conversion().rpy2py(rpy_df)
         return pd_from_r_df
     
-    def get_ligand_target_matrix_pd(self) -> pd.DataFrame:
-        """Convert a matrix into a panda DataFrame
 
-        Returns:
-            pd.DataFrame: _description_
-        """
+    def convert_matrix_pd(self, m):
         col2value = {}
-        # Just want to make the code easier to read
-        m = self.ligand_target_matrix
         index = 1 # Start with index = 1 since it is in R in rx
         for col in m.colnames:
             col2value[col] = m.rx(True, index)
@@ -91,6 +85,7 @@ class NicheNetWrapper:
         pd_df = self.rpy_2_pd_df(df)
         pd_df.index = m.rownames
         return pd_df
+    
 
     def get_expressed_genes(self,
                             adata: sc.AnnData,
@@ -248,9 +243,9 @@ class NicheNetWrapper:
             The third is the data source pd.DataFrame if requested.
         """
         active_signaling_network = nichenet.get_ligand_signaling_path(ligand_tf_matrix=self.ligand_tf_matrix, 
-                                                              ligands_all=StrVector(ligands_all), 
-                                                              targets_all=StrVector(targets_all), 
-                                                              weighted_networks=self.weighted_networks)
+                                                                      ligands_all=StrVector(ligands_all), 
+                                                                      targets_all=StrVector(targets_all), 
+                                                                      weighted_networks=self.weighted_networks)
         sig_network_pd = self.rpy_2_pd_df(active_signaling_network.rx2['sig'])
         gr_network_pd = self.rpy_2_pd_df(active_signaling_network.rx2['gr'])
         if weight_cutoff:
@@ -310,7 +305,7 @@ class NicheNetWrapper:
         ligand2targets = {}
 
         # Convert it to pd.DataFrame for easy handling in Python
-        ligand_target_df = self.get_ligand_target_matrix_pd()
+        ligand_target_df = self.convert_matrix_pd(self.ligand_target_matrix)
         if background_genes is not None:
             # Do a filter
             ligand_target_df = ligand_target_df.loc[ligand_target_df.index.isin(background_genes)]
@@ -319,3 +314,22 @@ class NicheNetWrapper:
             ligand2targets[ligand] = targets.index.to_list()
 
         return ligand2targets
+    
+
+    def get_ligand_2_tfs(self,
+                         weight_cutoff: float=0.001) -> dict:
+        ligand2tfs = {}
+        ligand_tf_df = self.convert_matrix_pd(self.ligand_tf_matrix)
+        for ligand in ligand_tf_df.columns:
+            tfs = ligand_tf_df[ligand_tf_df[ligand] >= weight_cutoff].index.to_list()
+            if len(tfs) == 0:
+                continue
+            ligand2tfs[ligand] = tfs
+        return ligand2tfs
+
+    
+    def list_all_targets(self) -> list:
+        ligand2targets = self.get_ligand_2_targets()
+        all_targets = [target for targets in ligand2targets.values() for target in targets]
+        all_targets = list(set(all_targets))
+        return all_targets
