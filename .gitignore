@@ -6,8 +6,17 @@
 /python/cache
 /python/data
 /python/figures
+/python/build
+/python/dist_mac/
+/python/dist_win/
 /logs
 /PySrc
 /data
 /.settings
 results
+python/dist_mac/grequests.py
+python/resources/cellphonedb/
+python/resources/nichenet/
+python/*.pyz
+cache/
+python/resources/
