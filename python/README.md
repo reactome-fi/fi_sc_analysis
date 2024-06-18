@@ -19,7 +19,7 @@ This Python package is used to help **building regulatory networks** composed of
 3. pip install scvelo
 4. pip install .
 
-**Note: The setup.py has been updated for the above procedures**
+**Note: The setup.py has been updated for the above procedures. To use the python wrapped nichenet features, make sure nichenetr is installed by following https://www.nichenet.be.**
 
 - You may install our released version by simply running the following:
 

@@ -34,7 +34,15 @@ setup(
         # 'magic_impute>=2.0.3',
         # 'pyscenic>=0.12.1',
         'gseapy==0.10.4',
-        'joblib==0.16.0'
+        'joblib==0.16.0',
+        # For nichenet-based ligand analysis. Make sure nichenetr is installed!!!
+        'rpy2>=3.5.12',
+        'cellphonedb>=5.0.0',
+        'ktplotspy>=0.2.3,' # Use to plot cellphonedb analysis results
+        'py4cytoscape>=1.9.0', # Visualize networks in Cytoscape desktop
+        'langchain>=0.1.16', # Some LLM stuff
+        'langchain_openai>=0.1.3',
+        'python-dotenv>=1.0.1'
     ],
     extras_require={
         'pandas': ['pandas>=1.0.5'],
